@@ -1,13 +1,13 @@
 use std::{
-	env::Args,
-	io::{BufRead as _, Result},
-	net::{IpAddr, Ipv4Addr, SocketAddr},
-	str::FromStr,
+	collections::HashMap, io::{BufRead as _, Result}, net::{IpAddr, Ipv4Addr, SocketAddr}, str::FromStr,
 };
 
-use fstdns::dmap::DMapBuilder;
+use fstdns::{
+	dmap::DMapBuilder,
+	action::Action,
+};
 
-const DEFAULT_CONF_PATH: &str = "conf";
+const DEFAULT_CONF_PATH: &str = "etc/conf";
 
 const DEFAULT_DNS_PORT: u16 = 53;
 
@@ -17,41 +17,37 @@ const DEFAULT_LISTEN_ADDR: SocketAddr =
 fn main() -> Result<()> {
 	let args: Vec<_> = std::env::args().into_iter().take(2).collect();
 	let mut conf = Conf::new();
-	let mut fstb = DMapBuilder::new();
+	let mut builder = DMapBuilder::new();
 	if args.len() == 1 {
-		conf.conf(&mut fstb, std::fs::File::open(DEFAULT_CONF_PATH)?)?;
+		conf.conf(&mut builder, std::fs::File::open(DEFAULT_CONF_PATH)?)?;
 	} else {
 		if args[1] == "-" {
-			conf.conf(&mut fstb, std::io::stdin())?;
+			conf.conf(&mut builder, std::io::stdin())?;
 		} else {
-			conf.conf(&mut fstb, std::fs::File::open(&args[1] as &str)?)?;
+			conf.conf(&mut builder, std::fs::File::open(&args[1] as &str)?)?;
 		}
 	};
-	let dmap = fstb.build();
+	let dmap = builder.build();
 	Ok(())
 }
 
-enum Action {
-	AltUp(u8),
-	NxDomain,
-	NotImp,
-	Refused,
-}
 
 struct Conf {
 	listen: SocketAddr,
-	qtype_rules: Vec<(u16, Action)>,
 	upstream: Vec<SocketAddr>,
 	alts: Vec<Vec<SocketAddr>>,
+	exact_rules: HashMap<(Vec<u8>, u16), Action>,
+	qtype_rules: Vec<(u16, Action)>,
 }
 
 impl Conf {
 	fn new() -> Self {
 		Self {
 			listen: DEFAULT_LISTEN_ADDR,
-			qtype_rules: Vec::new(),
 			upstream: Vec::new(),
 			alts: Vec::new(),
+			exact_rules: HashMap::new(),
+			qtype_rules: Vec::new(),
 		}
 	}
 
@@ -78,8 +74,17 @@ impl Conf {
 				self.upstream
 					.extend((&args[1..]).iter().map(|a| parse_addr(a.trim())));
 			}
+			"resolv-conf" => {
+				self.resolv_conf(&args[1..])?;
+			}
+			"domain" => {
+				self.domain_rule(b, &args[1..])?;
+			}
+			"domain-list" => {
+				self.domain_list_rule(b, &args[1..])?;
+			}
 			"qtype" => {
-				self.qtype_rule(b, &args[1..])?;
+				self.qtype_rule(&args[1..])?;
 			}
 			_ => {
 				eprintln!("unrecognized conf line: \"{}\"", l);
@@ -88,8 +93,20 @@ impl Conf {
 		Ok(())
 	}
 
-	fn qtype_rule(&mut self, b: &mut DMapBuilder, r: &[&str]) -> Result<()> {
-		unimplemented!()
+	fn resolv_conf(&mut self, r: &[&str]) -> Result<()> {
+		todo!()
+	}
+
+	fn domain_rule(&mut self, b: &mut DMapBuilder, r: &[&str]) -> Result<()> {
+		todo!()
+	}
+
+	fn domain_list_rule(&mut self, b: &mut DMapBuilder, r: &[&str]) -> Result<()> {
+		todo!()
+	}
+
+	fn qtype_rule(&mut self, r: &[&str]) -> Result<()> {
+		todo!()
 	}
 }
 

@@ -190,9 +190,9 @@ mod tests {
 		assert_eq!(m.get("notsubexample.com"), Some(0));
 	}
 
-	const DOMAIN_LST_FILE: &str = "lst/domainswild";
+	const DOMAIN_LST_FILE: &str = "etc/domainswild";
 	const DOMAIN_LST_PRE: &[u8] = b"*.";
-	const QUERY_LST_FILE: &str = "lst/queries";
+	const QUERY_LST_FILE: &str = "etc/queries";
 
 	#[test]
 	fn test_build() {
