@@ -2,11 +2,13 @@
 	"cSpell.words": [
 		"dmap",
 		"dnsmasq",
+		"domainswild",
 		"fstdns",
 		"notimp",
 		"oisd",
 		"qtype",
 		"rdata",
-		"SVCB"
+		"resolv",
+		"svcb"
 	]
 }

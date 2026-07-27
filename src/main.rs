@@ -9,7 +9,7 @@ use std::{
 
 use itertools::Itertools as _;
 
-use fstdns::{action::Action, dmap::DMapBuilder};
+use fstdns::{action, dmap::DMapBuilder};
 
 const DEFAULT_CONF_PATH: &str = "etc/conf";
 
@@ -137,7 +137,7 @@ impl Conf {
 			panic!("invalid domain rule: \"{}\"", args.join(" "));
 		}
 		let action = self.inner_action(&args[1..]);
-		b.add_list([args[0]], action.into());
+		b.add_list([args[0]], action);
 	}
 
 	fn domain_list_rule(&mut self, b: &mut DMapBuilder, args: &[&str]) {
@@ -146,7 +146,7 @@ impl Conf {
 		}
 		let (path, prefix) = args[0].split_once(' ').unwrap_or((args[0], ""));
 		let action = self.inner_action(&args[1..]);
-		if let Err(e) = b.add_file(path, prefix.as_bytes(), action.into()) {
+		if let Err(e) = b.add_file(path, prefix.as_bytes(), action) {
 			panic!("error loading domain list \"{}\": {}", path, e);
 		}
 	}
@@ -157,18 +157,18 @@ impl Conf {
 		}
 		let qtype = parse_qtype(args[0]);
 		let action = self.inner_action(&args[1..]);
-		self.qtype_rules.push((qtype, action.into()));
+		self.qtype_rules.push((qtype, action));
 	}
 
-	fn inner_action(&mut self, args: &[&str]) -> Action {
+	fn inner_action(&mut self, args: &[&str]) -> u64 {
 		match args.len() {
 			0 => {
 				panic!("action not specified in rule");
 			}
 			1 => match args[0].to_ascii_lowercase().as_str() {
-				"nxdomain" => Action::NxDomain,
-				"notimp" => Action::NotImp,
-				"refused" => Action::Refused,
+				"nxdomain" => action::ACTION_NXDOMAIN,
+				"notimp" => action::ACTION_NOTIMP,
+				"refused" => action::ACTION_REFUSED,
 				_ => {
 					panic!("invalid action \"{}\"", args[0]);
 				}
@@ -176,7 +176,7 @@ impl Conf {
 			_ => match args[0].to_ascii_lowercase().as_str() {
 				"upstream" => {
 					if args.len() == 2 && args[1].to_ascii_lowercase().as_str() == "default" {
-						Action::Default
+						action::ACTION_DEFAULT
 					} else {
 						self.inner_alt(&args[1..])
 					}
@@ -188,23 +188,22 @@ impl Conf {
 		}
 	}
 
-	fn inner_alt(&mut self, args: &[&str]) -> Action {
+	fn inner_alt(&mut self, args: &[&str]) -> u64 {
 		if args.is_empty() {
 			panic!("empty upstream spec");
 		}
 		let alt: Vec<SocketAddr> = args.iter().map(parse_addr).collect();
 		if let Some(i) = self.alts.iter().position(|e| e == &alt) {
-			Action::AltUp(i as u8)
+			action::u64_from_alt(i as u8)
 		} else if self.alts.len() < u8::MAX as usize {
 			self.alts.push(alt);
-			Action::AltUp((self.alts.len() - 1) as u8)
+			action::u64_from_alt((self.alts.len() - 1) as u8)
 		} else {
 			panic!("too much");
 		}
 	}
 }
 
-#[inline]
 fn parse_addr(a: impl AsRef<str>) -> SocketAddr {
 	let a = a.as_ref();
 	if let Ok(a) = SocketAddr::from_str(a) {
@@ -217,7 +216,6 @@ fn parse_addr(a: impl AsRef<str>) -> SocketAddr {
 	}
 }
 
-#[inline]
 fn parse_qtype(q: &str) -> u16 {
 	match q.to_ascii_lowercase().as_str() {
 		"aaaa" => 28,

@@ -170,7 +170,7 @@ mod tests {
 
 	#[test]
 	fn test_match() {
-		let mut b = DMapBuilder::new();
+		let mut b = DMapBuilder::default();
 		b.add_list(&[b"com"], 0);
 		b.add_list(&[b"example.com"], 1);
 		let m = b.build().unwrap();
@@ -190,7 +190,7 @@ mod tests {
 
 	#[test]
 	fn test_build() {
-		let mut b = DMapBuilder::new();
+		let mut b = DMapBuilder::default();
 		b.add_file(DOMAIN_LST_FILE, DOMAIN_LST_PRE, 0).unwrap();
 		let _ = b.build().unwrap();
 	}
@@ -199,7 +199,7 @@ mod tests {
 	#[test]
 	fn test_match_lst() {
 		// build fst and control
-		let mut b = DMapBuilder::new();
+		let mut b = DMapBuilder::default();
 		let mut h = HashMap::new();
 		let mut l = Vec::with_capacity(MAX_FQDN_LEN + 2);
 		let mut r = std::io::BufReader::new(std::fs::File::open(DOMAIN_LST_FILE).unwrap());
