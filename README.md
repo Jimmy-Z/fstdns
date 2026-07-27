@@ -42,7 +42,8 @@ default to `conf` if not specified.
 list of configurations:
 * `listen`, default to `0.0.0.0:53`
 * `upstream`, default upstream when no rules match
-* `resolv-conf`
+	* this 
+* `resolv-conf <path>`, get upstream from resolv conf
 * `hosts <path> [domain]`
 	* `domain` is used to expand hosts
 		* like `a` in hosts will also expand to `a.lan`

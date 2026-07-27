@@ -40,6 +40,7 @@ impl<D: AsRef<[u8]>> DMap<D> {
 	}
 }
 
+#[derive(Default)]
 pub struct DMapBuilder {
 	files: Vec<(Vec<u8>, Vec<u8>, u64)>,
 	lists: Vec<(Vec<Vec<u8>>, u64)>,
@@ -47,13 +48,6 @@ pub struct DMapBuilder {
 }
 
 impl DMapBuilder {
-	pub fn new() -> Self {
-		Self {
-			files: Vec::new(),
-			lists: Vec::new(),
-			count_hint: 0,
-		}
-	}
 	pub fn add_file(&mut self, path: &str, prefix: &[u8], v: u64) -> Result<()> {
 		let t0 = Instant::now();
 		let file = std::fs::read(path)?;
@@ -91,7 +85,7 @@ impl DMapBuilder {
 					if line.len() < prefix.len() || &line[..prefix.len()] != prefix {
 						eprintln!(
 							"unexpected line, no prefix ({}): \"{}\"",
-							str::from_utf8(&prefix).unwrap(),
+							str::from_utf8(prefix).unwrap(),
 							str::from_utf8(line).unwrap()
 						);
 					}
