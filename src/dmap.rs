@@ -164,6 +164,12 @@ fn rev_cmp(a: &[u8], b: &[u8]) -> Ordering {
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		collections::HashMap,
+		hash::{Hash as _, Hasher},
+		io::BufRead as _,
+	};
+
 	use crate::dmap::DMapBuilder;
 
 	use super::*;
@@ -184,10 +190,88 @@ mod tests {
 		assert_eq!(m.get("notsubexample.com"), Some(0));
 	}
 
+	const DOMAIN_LST_FILE: &str = "lst/domainswild";
+	const DOMAIN_LST_PRE: &[u8] = b"*.";
+	const QUERY_LST_FILE: &str = "lst/queries";
+
 	#[test]
 	fn test_build() {
 		let mut b = DMapBuilder::new();
-		b.add_file("lst/domainswild", b"*.", 0).unwrap();
+		b.add_file(DOMAIN_LST_FILE, DOMAIN_LST_PRE, 0).unwrap();
 		let _ = b.build().unwrap();
+	}
+
+	// test a list using hashmap as control
+	#[test]
+	fn test_match_lst() {
+		// build fst and control
+		let mut b = DMapBuilder::new();
+		let mut h = HashMap::new();
+		let mut l = Vec::with_capacity(MAX_FQDN_LEN + 2);
+		let mut r = std::io::BufReader::new(std::fs::File::open(DOMAIN_LST_FILE).unwrap());
+		let mut c: usize = 0;
+		while r.read_until(b'\n', &mut l).unwrap() > 0 {
+			let mut n = l.trim_ascii();
+			if n.is_empty() || n[0] == b'#' {
+				eprintln!("skipped empty line / comment: {}", unsafe {
+					str::from_utf8_unchecked(n)
+				});
+				l.clear();
+				continue;
+			}
+			if &n[0..DOMAIN_LST_PRE.len()] != DOMAIN_LST_PRE {
+				eprintln!("unexpected line: {:?}", unsafe {
+					str::from_utf8_unchecked(n)
+				});
+				l.clear();
+				continue;
+			}
+			n = &n[DOMAIN_LST_PRE.len()..];
+			let v = {
+				// derive v
+				let mut h = std::hash::DefaultHasher::new();
+				n.hash(&mut h);
+				h.finish()
+			};
+			b.add_list(&[n], v);
+			h.insert(n.to_vec(), v);
+			c += 1;
+			l.clear();
+		}
+		eprintln!("{} domains loaded", c);
+		let t = b.build().unwrap();
+
+		// test
+		r = std::io::BufReader::new(std::fs::File::open(QUERY_LST_FILE).unwrap());
+		c = 0;
+		let mut hits: usize = 0;
+		while r.read_until(b'\n', &mut l).unwrap() > 0 {
+			let n = l.trim_ascii();
+			if n.is_empty() {
+				l.clear();
+				continue;
+			}
+			let expected = subdomain_get(&h, n);
+			assert_eq!(t.get(unsafe { str::from_utf8_unchecked(n) }), expected);
+			if expected.is_some() {
+				hits += 1;
+			}
+			c += 1;
+			l.clear();
+		}
+		eprintln!("{} tests conducted, {} hits", c, hits);
+	}
+
+	fn subdomain_get(h: &HashMap<Vec<u8>, u64>, mut n: &[u8]) -> Option<u64> {
+		loop {
+			if let Some(r) = h.get(n) {
+				return Some(*r);
+			}
+			if let Some(p) = n.iter().position(|b| *b == b'.') {
+				n = &n[p + 1..]
+			} else {
+				return None;
+			}
+		}
 	}
 }
