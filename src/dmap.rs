@@ -2,20 +2,9 @@
 
 use std::{cmp::Ordering, time::Instant};
 
-use fst::raw::{Builder, Fst, Output};
+use fst::{raw::{Builder, Fst, Output}, Result};
 
 pub struct DMap<D>(Fst<D>);
-
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-	#[error("IO error: {0}")]
-	Io(#[from] std::io::Error),
-
-	#[error("Fst error: {0}")]
-	Fst(#[from] fst::Error),
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
 
 const MAX_FQDN_LEN: usize = 253;
 
