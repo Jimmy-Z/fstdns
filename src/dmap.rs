@@ -2,7 +2,10 @@
 
 use std::{cmp::Ordering, time::Instant};
 
-use fst::{raw::{Builder, Fst, Output}, Result};
+use fst::{
+	Result,
+	raw::{Builder, Fst, Output},
+};
 
 pub struct DMap<D>(Fst<D>);
 
@@ -37,36 +40,49 @@ impl<D: AsRef<[u8]>> DMap<D> {
 	}
 }
 
-// implement a proper builder style api would require massive effort on lifetime annotation
-impl DMap<Vec<u8>> {
-	pub fn new(
-		file_list: &[(&str, Option<&[u8]>, u64)],
-		plain_lists: &[(&[&[u8]], u64)],
-		capacity: usize,
-	) -> Result<Self> {
+pub struct DMapBuilder {
+	files: Vec<(Vec<u8>, Vec<u8>, u64)>,
+	lists: Vec<(Vec<Vec<u8>>, u64)>,
+}
+
+impl DMapBuilder {
+	pub fn new() -> Self {
+		Self {
+			files: Vec::new(),
+			lists: Vec::new(),
+		}
+	}
+	pub fn add_file(&mut self, path: &str, prefix: &[u8], v: u64) -> Result<()> {
+		let t0 = Instant::now();
+		let file = std::fs::read(path)?;
+		eprintln!("loaded \"{}\", {} bytes, in {}ms", path, file.len(), t0.elapsed().as_secs_f32() * 1000f32);
+		self.files.push((file, prefix.to_vec(), v));
+		Ok(())
+	}
+
+	pub fn add_list(&mut self, list: impl IntoIterator<Item = impl AsRef<[u8]>>, v: u64) {
+		self.lists
+			.push((list.into_iter().map(|e| e.as_ref().to_vec()).collect(), v));
+	}
+
+	pub fn build(self, count_hint: usize) -> Result<DMap<Vec<u8>>> {
 		let mut bytes = 0;
 		// we have to sort them, not storing them all in memory is HARD
 		// to prevent memory fragmentation from lots of String alloc
 		// we read them in whole and use &str instead
 		let t0 = Instant::now();
-		let files: Vec<Vec<u8>> = file_list
-			.iter()
-			.map(|e| std::fs::read(e.0))
-			.collect::<std::io::Result<Vec<_>>>()?;
-		let mut kv: Vec<(&[u8], u64)> = Vec::with_capacity(capacity);
-		for i in 0..file_list.len() {
-			let prefix = file_list[i].1;
-			let v = file_list[i].2;
-			for mut line in files[i].split(is_newline) {
+		let mut kv: Vec<(&[u8], u64)> = Vec::with_capacity(count_hint);
+		for (file, prefix, v) in self.files.iter() {
+			for mut line in file.split(is_newline) {
 				line = line.trim_ascii();
 				if line.is_empty() || line[0] == b'#' {
 					continue;
 				}
-				if let Some(prefix) = prefix {
+				if !prefix.is_empty() {
 					if line.len() < prefix.len() || &line[..prefix.len()] != prefix {
 						eprintln!(
 							"unexpected line, no prefix ({}): \"{}\"",
-							str::from_utf8(prefix).unwrap(),
+							str::from_utf8(&prefix).unwrap(),
 							str::from_utf8(line).unwrap()
 						);
 					}
@@ -81,21 +97,21 @@ impl DMap<Vec<u8>> {
 					continue;
 				}
 				bytes += line.len();
-				kv.push((line, v));
+				kv.push((line, *v));
 			}
 		}
 
-		for &list in plain_lists {
-			for &k in list.0 {
+		for list in self.lists.iter() {
+			for k in list.0.iter() {
 				bytes += k.len();
-				kv.push((k, list.1));
+				kv.push((k as &[u8], list.1));
 			}
 		}
 
 		let t1 = Instant::now();
 		bytes += kv.len(); // counting delimiters
 		eprintln!(
-			"loaded {} domains, {} bytes, in {:.1}ms",
+			"parsed {} domains, {} bytes, in {:.1}ms",
 			kv.len(),
 			bytes,
 			t1.duration_since(t0).as_secs_f32() * 1000f32
@@ -111,7 +127,7 @@ impl DMap<Vec<u8>> {
 		let mut b = Builder::memory();
 		let mut rev = Vec::with_capacity(MAX_FQDN_LEN);
 		for (k, v) in kv.into_iter() {
-			rev.resize(0, 0);
+			rev.clear();
 			rev.extend(k.iter().rev().copied());
 			b.insert(&rev, v)?;
 		}
@@ -139,11 +155,16 @@ fn rev_cmp(a: &[u8], b: &[u8]) -> Ordering {
 
 #[cfg(test)]
 mod tests {
-	use super::DMap;
+	use crate::dmap::DMapBuilder;
+
+	use super::*;
 
 	#[test]
 	fn test_match() {
-		let m = DMap::new(&[], &[(&[b"com"], 0), (&[b"example.com"], 1)], 0x10).unwrap();
+		let mut b = DMapBuilder::new();
+		b.add_list(&[b"com"], 0);
+		b.add_list(&[b"example.com"], 1);
+		let m = b.build(0x10).unwrap();
 
 		assert_eq!(m.get("com"), Some(0));
 		assert_eq!(m.get("net"), None);
@@ -156,6 +177,8 @@ mod tests {
 
 	#[test]
 	fn test_build() {
-		let _ = DMap::new(&[("./lst/domainswild", Some(b"*."), 0)], &[], 0x1000);
+		let mut b = DMapBuilder::new();
+		b.add_file("lst/domainswild", b"*.", 0).unwrap();
+		let _ = b.build(0x10).unwrap();
 	}
 }
