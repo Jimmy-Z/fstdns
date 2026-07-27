@@ -1,0 +1,2 @@
+
+rule = nxdomain; domain = lst/domainswild : *.
