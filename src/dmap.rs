@@ -3,9 +3,10 @@
 use std::{cmp::Ordering, time::Instant};
 
 use fst::{
-	Result,
 	raw::{Builder, Fst, Output},
 };
+
+pub use fst::Result;
 
 pub struct DMap<D>(Fst<D>);
 
