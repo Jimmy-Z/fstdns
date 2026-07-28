@@ -2,9 +2,7 @@
 
 use std::{cmp::Ordering, time::Instant};
 
-use fst::{
-	raw::{Builder, Fst, Output},
-};
+use fst::raw::{Builder, Fst, Output};
 
 pub use fst::Result;
 
@@ -172,8 +170,8 @@ mod tests {
 	#[test]
 	fn test_match() {
 		let mut b = DMapBuilder::default();
-		b.add_list(&[b"com"], 0);
-		b.add_list(&[b"example.com"], 1);
+		b.add_list([b"com"], 0);
+		b.add_list([b"example.com"], 1);
 		let m = b.build().unwrap();
 
 		assert_eq!(m.get("com"), Some(0));
@@ -185,9 +183,9 @@ mod tests {
 		assert_eq!(m.get("notsubexample.com"), Some(0));
 	}
 
-	const DOMAIN_LST_FILE: &str = "etc/domainswild";
+	const DOMAIN_LST_FILE: &str = "etc/lists/domainswild";
 	const DOMAIN_LST_PRE: &[u8] = b"*.";
-	const QUERY_LST_FILE: &str = "etc/queries";
+	const QUERY_LST_FILE: &str = "etc/lists/queries-dedupe";
 
 	#[test]
 	fn test_build() {
@@ -228,7 +226,7 @@ mod tests {
 				n.hash(&mut h);
 				h.finish()
 			};
-			b.add_list(&[n], v);
+			b.add_list([n], v);
 			h.insert(n.to_vec(), v);
 			c += 1;
 			l.clear();
@@ -262,11 +260,8 @@ mod tests {
 			if let Some(r) = h.get(n) {
 				return Some(*r);
 			}
-			if let Some(p) = n.iter().position(|b| *b == b'.') {
-				n = &n[p + 1..]
-			} else {
-				return None;
-			}
+			let p = n.iter().position(|b| *b == b'.')?;
+			n = &n[p + 1..]
 		}
 	}
 }
