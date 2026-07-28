@@ -21,8 +21,8 @@ pub struct Conf {
 	pub qtype_rules: Vec<(u16, u64)>,
 }
 
-impl Conf {
-	pub fn new() -> Self {
+impl Default for Conf {
+	fn default() -> Self {
 		Self {
 			listen: DEFAULT_LISTEN_ADDR,
 			upstream: Vec::new(),
@@ -31,7 +31,9 @@ impl Conf {
 			qtype_rules: Vec::new(),
 		}
 	}
+}
 
+impl Conf {
 	pub fn conf<R: std::io::Read>(&mut self, b: &mut DMapBuilder, f: R) {
 		let mut r = BufReader::new(f);
 		let mut l = String::with_capacity(0x100);
@@ -49,7 +51,7 @@ impl Conf {
 		let args: Vec<&str> = l.split(' ').filter(|&a| !a.is_empty()).collect();
 		match args[0].to_ascii_lowercase().as_str() {
 			"listen" => self.listen = parse_addr(args[1]),
-			"upstream" => self.upstream(&args[1..]),
+			"default" => self.upstream(&args[1..]),
 			"resolv-conf" => {
 				self.resolv_conf(&args[1..]);
 			}
@@ -81,7 +83,9 @@ impl Conf {
 			|l| match l {
 				Ok(l) => {
 					let l = l.trim();
-					if let Some((k, v)) = l.split_once(' ')
+					if l.is_empty() || l.as_bytes()[0] == b'#' {
+						None
+					} else if let Some((k, v)) = l.split_once(' ')
 						&& k == "nameserver"
 					{
 						Some(parse_addr(v.trim()))
@@ -137,6 +141,7 @@ impl Conf {
 				panic!("action not specified in rule");
 			}
 			1 => match args[0].to_ascii_lowercase().as_str() {
+				"default" => action::ACTION_DEFAULT,
 				"nxdomain" => action::ACTION_NXDOMAIN,
 				"notimp" => action::ACTION_NOTIMP,
 				"refused" => action::ACTION_REFUSED,
@@ -145,13 +150,7 @@ impl Conf {
 				}
 			},
 			_ => match args[0].to_ascii_lowercase().as_str() {
-				"upstream" => {
-					if args.len() == 2 && args[1].to_ascii_lowercase().as_str() == "default" {
-						action::ACTION_DEFAULT
-					} else {
-						self.inner_alt(&args[1..])
-					}
-				}
+				"alt" => self.inner_alt(&args[1..]),
 				_ => {
 					panic!("unknown action \"{}\"", args.join(" "));
 				}

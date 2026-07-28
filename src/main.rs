@@ -9,7 +9,7 @@ const DEFAULT_CONF_PATH: &str = "etc/conf";
 
 fn main() -> Result<()> {
 	let args: Vec<_> = std::env::args().take(2).collect();
-	let mut conf = Conf::new();
+	let mut conf = Conf::default();
 	let mut builder = DMapBuilder::default();
 	if args.len() == 1 {
 		conf.conf(&mut builder, File::open(DEFAULT_CONF_PATH)?);

@@ -41,8 +41,7 @@ or `-` to read from stdin.
 default to `conf` if not specified.
 list of configurations:
 * `listen`, default to `0.0.0.0:53`
-* `upstream`, default upstream when no rules match
-	* this 
+* `default`, default upstream when no rules match
 * `resolv-conf <path>`, get upstream from resolv conf
 * `hosts <path> [domain]`
 	* `domain` is used to expand hosts
@@ -65,38 +64,40 @@ list of configurations:
 			* or decimal number
 		* `exact <name> <qtype>`
 	* actions:
-		* `NXDOMAIN`,
-		* `NOTIMP`,
-		* `REFUSED`,
-		* `upstream ...`
-			* there is also a special name `default`
+		* `NXDOMAIN`
+		* `NOTIMP`
+		* `REFUSED`
+		* `alt ...`
+		* `default`
 		* `rewrite <ttl> <rdata>`
 			* (planned)
 			* only makes sense with exact rule
 
 example:
 ```sh
-# unprivileged port, handy for debugging
+# use unprivileged port for debugging
 listen 127.0.0.1:1053
-upstream 1.1.1.1 1.0.0.1
+#
+default 1.1.1.1 1.0.0.1
+#
 hosts /etc/hosts lan
 # to resolve dhcp names if you have dnsmasq doing that
 # or nxdomain if you don't have it, to prevent leaking to upstream
-unqualified upstream 192.168.0.1
-domain lan upstream 192.168.0.1
+unqualified alt 192.168.0.1
+domain lan alt 192.168.0.1
 # use alternative upstream for domains listed in that file
-domain-list /etc/list upstream 8.8.8.8 8.8.4.4
+domain-list /etc/list alt 8.8.8.8 8.8.4.4
 # block these domains
 # `:*.` handles oisd _domainswild_ list intended for FreshTomato
 domain-list /etc/oisd:*. nxdomain
-# block query type https
+# 
 qtype https notimp
 ```
 due to the weak parser, strange file names (contains space or colon) will not work.
 
 ### internals
-* priority order,
-for example, even with `unqualified nxdomain`, hosts records will still be served.
+* priority order, for example,
+even with `unqualified nxdomain`, hosts records will still be served.
 	* exact rules
 		* internally hosts records are exact rewrite rules (a, aaaa, ptr)
 	* rule for unqualified names
