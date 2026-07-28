@@ -145,6 +145,43 @@ mod tests {
 		print_svec_sizes!(u8; 15, 16, 23, 31, 35, 39, 47, 55, 63);
 	}
 
+	#[test]
+	fn svec_push_transitions_to_ext() {
+		let mut s: SVec<u8, 3> = SVec::from(&[1u8, 2u8][..]);
+		assert_eq!(s.as_ref(), &[1, 2]);
+		assert!(matches!(s, SVec::Int(_)));
+
+		s.push(3);
+		assert_eq!(s.as_ref(), &[1, 2, 3]);
+		assert!(matches!(s, SVec::Int(_)));
+
+		s.push(4);
+		assert_eq!(s.as_ref(), &[1, 2, 3, 4]);
+		assert!(matches!(s, SVec::Ext(_)));
+
+		s.push(5);
+		assert_eq!(s.as_ref(), &[1, 2, 3, 4, 5]);
+		assert!(matches!(s, SVec::Ext(_)));
+	}
+
+	#[test]
+	fn svec_extend_from_slice_hits_int_and_ext() {
+		let mut s: SVec<u8, 4> = SVec::from(&[1u8, 2u8][..]);
+		s.extend_from_slice(&[3u8, 4u8]);
+		assert_eq!(s.as_ref(), &[1, 2, 3, 4]);
+		assert!(matches!(s, SVec::Int(_)));
+
+		s.extend_from_slice(&[5]);
+		assert_eq!(s.as_ref(), &[1, 2, 3, 4, 5]);
+		assert!(matches!(s, SVec::Ext(_)));
+
+		let mut other: SVec<u8, 3> = SVec::from(&[1u8, 2u8, 3u8, 4u8][..]);
+		assert!(matches!(other, SVec::Ext(_)));
+		other.extend_from_slice(&[5u8, 6u8]);
+		assert_eq!(other.as_ref(), &[1, 2, 3, 4, 5, 6]);
+		assert!(matches!(other, SVec::Ext(_)));
+	}
+
 	// tough choice
 	// === etc/lists/queries-dedupe ===
 	// 3517 total names
