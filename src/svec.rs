@@ -5,7 +5,7 @@ use std::num::NonZeroU8;
 // beware, since the usage of NonZero, len is internally presented +1
 const MAX_CAP: usize = NonZeroU8::MAX.get() as usize - 1;
 
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug)]
 pub enum SVec<T: Copy, const C: usize> {
 	Int(([T; C], NonZeroU8)),
 	Ext(Vec<T>),
@@ -112,6 +112,35 @@ impl<T: Copy + Default, const C: usize> From<Vec<T>> for SVec<T, C> {
 		} else {
 			Self::Ext(v)
 		}
+	}
+}
+
+use std::hash::{Hash, Hasher};
+use std::cmp::Ordering;
+
+impl<T: Hash + Copy, const C: usize> Hash for SVec<T, C> {
+	fn hash<H: Hasher>(&self, state: &mut H) {
+		self.as_ref().hash(state);
+	}
+}
+
+impl<T: PartialEq + Copy, const C: usize> PartialEq for SVec<T, C> {
+	fn eq(&self, other: &Self) -> bool {
+		self.as_ref() == other.as_ref()
+	}
+}
+
+impl<T: Eq + PartialEq + Copy, const C: usize> Eq for SVec<T, C> {}
+
+impl<T: PartialOrd + Copy, const C: usize> PartialOrd for SVec<T, C> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		self.as_ref().partial_cmp(other.as_ref())
+	}
+}
+
+impl<T: Ord + Copy, const C: usize> Ord for SVec<T, C> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.as_ref().cmp(other.as_ref())
 	}
 }
 
@@ -232,10 +261,12 @@ mod tests {
 		let mut acc = 0;
 		for (i, c) in stats.iter().enumerate() {
 			acc += *c;
-			if [15usize, 31, 39, 47, 55, 63].contains(&i) {
+			// if [15usize, 31, 39, 47, 55, 63].contains(&i) {
+			if *c > 0{
 				println!(
-					"{:>3}, {:>7}, {:>5.1}%",
+					"{:>3}, {:>6}, {:>7}, {:>5.1}%",
 					i,
+					c,
 					acc,
 					acc as f32 * 100f32 / total as f32
 				)
