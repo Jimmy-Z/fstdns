@@ -9,6 +9,7 @@
 		"qtype",
 		"rdata",
 		"resolv",
-		"svcb"
+		"svcb",
+		"svec"
 	]
 }
