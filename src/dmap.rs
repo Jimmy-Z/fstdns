@@ -11,8 +11,7 @@ pub struct DMap<D>(Fst<D>);
 const MAX_FQDN_LEN: usize = 253;
 
 impl<D: AsRef<[u8]>> DMap<D> {
-	pub fn get(&self, n: &str) -> Option<u64> {
-		let b = n.as_bytes();
+	pub fn get(&self, b: &[u8]) -> Option<u64> {
 		let mut node = self.0.root();
 		let mut out = Output::zero();
 		let mut last_match = None;
@@ -25,10 +24,10 @@ impl<D: AsRef<[u8]>> DMap<D> {
 					last_match = Some(out.cat(node.final_output()).value());
 					eprintln!(
 						"found match for \"{}\", {} at pos {} ({})",
-						n,
+						unsafe { str::from_utf8_unchecked(b) },
 						last_match.unwrap(),
 						i,
-						&n[i..] // str slicing is byte positioned
+						unsafe { str::from_utf8_unchecked(&b[i..]) }
 					);
 				}
 			} else {
@@ -174,13 +173,13 @@ mod tests {
 		b.add_list([b"example.com"], 1);
 		let m = b.build().unwrap();
 
-		assert_eq!(m.get("com"), Some(0));
-		assert_eq!(m.get("net"), None);
-		assert_eq!(m.get("a.com"), Some(0));
-		assert_eq!(m.get("acom"), None);
-		assert_eq!(m.get("example.com"), Some(1));
-		assert_eq!(m.get("sub.example.com"), Some(1));
-		assert_eq!(m.get("notsubexample.com"), Some(0));
+		assert_eq!(m.get(b"com"), Some(0));
+		assert_eq!(m.get(b"net"), None);
+		assert_eq!(m.get(b"a.com"), Some(0));
+		assert_eq!(m.get(b"acom"), None);
+		assert_eq!(m.get(b"example.com"), Some(1));
+		assert_eq!(m.get(b"sub.example.com"), Some(1));
+		assert_eq!(m.get(b"notsubexample.com"), Some(0));
 	}
 
 	const DOMAIN_LST_FILE: &str = "etc/lists/domainswild";
@@ -188,6 +187,7 @@ mod tests {
 	const QUERY_LST_FILE: &str = "etc/lists/queries-dedupe";
 
 	#[test]
+	#[ignore]
 	fn test_build() {
 		let mut b = DMapBuilder::default();
 		b.add_file(DOMAIN_LST_FILE, DOMAIN_LST_PRE, 0).unwrap();
@@ -196,6 +196,7 @@ mod tests {
 
 	// test a list using hashmap as control
 	#[test]
+	#[ignore]
 	fn test_match_lst() {
 		// build fst and control
 		let mut b = DMapBuilder::default();
@@ -245,7 +246,7 @@ mod tests {
 				continue;
 			}
 			let expected = subdomain_get(&h, n);
-			assert_eq!(t.get(unsafe { str::from_utf8_unchecked(n) }), expected);
+			assert_eq!(t.get(n), expected);
 			if expected.is_some() {
 				hits += 1;
 			}

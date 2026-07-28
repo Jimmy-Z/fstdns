@@ -15,7 +15,7 @@ const DEFAULT_LISTEN_ADDR: SocketAddr =
 
 pub struct Conf {
 	pub listen: SocketAddr,
-	pub upstream: Vec<SocketAddr>,
+	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
 	pub exact_rules: HashMap<(Vec<u8>, u16), u64>,
 	pub qtype_rules: Vec<(u16, u64)>,
@@ -25,7 +25,7 @@ impl Default for Conf {
 	fn default() -> Self {
 		Self {
 			listen: DEFAULT_LISTEN_ADDR,
-			upstream: Vec::new(),
+			default: Vec::new(),
 			alts: Vec::new(),
 			exact_rules: HashMap::new(),
 			qtype_rules: Vec::new(),
@@ -103,8 +103,8 @@ impl Conf {
 	}
 
 	fn inner_upstream(&mut self, v: impl Iterator<Item = SocketAddr>) {
-		self.upstream.clear();
-		self.upstream.extend(v);
+		self.default.clear();
+		self.default.extend(v);
 	}
 
 	fn domain_rule(&mut self, b: &mut DMapBuilder, args: &[&str]) {
