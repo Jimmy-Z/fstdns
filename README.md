@@ -53,6 +53,7 @@ list of configurations:
 		* `domain <domain>`
 			* `foo.bar` matches `foo.bar` AND `sub.foo.bar`,
 			but not `subfoo.bar`
+			* longest match wins
 		* `domain-list <file_name>[^prefix]`
 			* similar to `domain`, each line represents a domain
 			* lines started with `#` are considered comment
@@ -62,7 +63,6 @@ list of configurations:
 		* `qtype <qtype>` dns query type
 			* a few names are supported like AAAA, SVCB, HTTPS
 			* or decimal number
-		* `exact <qtype> <name_or_cidr>`
 	* actions:
 		* `NXDOMAIN`
 		* `NOTIMP`
@@ -97,30 +97,20 @@ qtype https notimp
 # let dnsmasq resolve ptr for 192.168.0.0/24
 domain 0.168.192.in-addr.arpa alt 192.168.0.1
 ```
-due to the weak parser, strange file names (contains space or ^) will not work.
+due to the weak parser, strange file names (contains space or ^) might not work.
 
 ### internals
 * priority order, for example,
 even with `unqualified nxdomain`, hosts records will still be served.
-	* exact rules
-		* internally hosts records are exact rewrite rules (a, aaaa, ptr)
-	* rule for unqualified names
-	* query type rule
+	* hosts records (a, aaaa, ptr)
+	* rules for unqualified names
+	* query type rules
 	* domain rules
-		* longest match wins
 	* default upstream
 * CHAOS diagnostics
 	* `drill example.com txt ch`
 		* test domain rules, since this skips other checks,
 		it might not reflect actual behavior
-
-### tips
-* to specify alternative upstream for ptr queries: `domain 0.168.192.in-addr.arpa`
-* to stop lan queries from leaking to isp without having dnsmasq for local/dhcp resolve:
-	```
-	unqualified nxdomain
-	domain lan nxdomain
-	```
 
 ### links
 * https://github.com/BurntSushi/fst

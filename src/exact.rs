@@ -1,11 +1,11 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::DName;
+use dns::CVec63;
 
 // since ip6 ptr name is so fucking long, 32 (digits) * 2 + 8 (ip6.arpa) = 72 chars
 // 5.c.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.d.0.0.3.c.5.9.0.e.0.4.2.ip6.arpa
 pub enum Exact {
-	Q((DName, u16)),
+	Q((CVec63, u16)),
 	Ptr4(Ipv4Addr),
 	Ptr6(Ipv6Addr),
 }
@@ -17,9 +17,13 @@ mod tests {
 		net::{Ipv4Addr, Ipv6Addr},
 	};
 
+	use super::*;
+
 	#[test]
 	fn test() {
 		eprintln!("size of Ipv4Addr: {}", size_of::<Ipv4Addr>());
 		eprintln!("size of Ipv6Addr: {}", size_of::<Ipv6Addr>());
+		eprintln!("size of CVec63: {}", size_of::<CVec63>());
+		eprintln!("size of Exact: {}", size_of::<Exact>());
 	}
 }

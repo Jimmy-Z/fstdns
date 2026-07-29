@@ -5,8 +5,15 @@ edition = "2024"
 
 [dependencies]
 itertools = "*"
+env_logger = "*"
+log = {version = "*", features = ["release_max_level_debug"]}
 
+tokio = {version = "1"}
 fst = "*"
+dns = { path = "../bbdnsp" }
 
 [dev-dependencies]
 rand = "*"
+
+[build-dependencies]
+misc = { path = "../misc" }

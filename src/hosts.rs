@@ -6,7 +6,7 @@ use std::{
 	str::FromStr,
 };
 
-use crate::DName;
+use dns::CVec63;
 
 const BLACK_LIST: &[&[u8]] = &[
 	b"localhost",
@@ -16,7 +16,7 @@ const BLACK_LIST: &[&[u8]] = &[
 	b"ip6-allrouters",
 ];
 
-type DNameMap<T> = HashMap<DName, T>;
+type DNameMap<T> = HashMap<CVec63, T>;
 
 pub fn parse_hosts(
 	hosts4: &mut DNameMap<Vec<Ipv4Addr>>,
@@ -48,7 +48,7 @@ pub fn parse_hosts(
 			if BLACK_LIST.contains(&name) {
 				continue;
 			}
-			let name = DName::from(name);
+			let name = CVec63::from(name);
 			match addr {
 				IpAddr::V4(a) => {
 					let v = hosts4.entry(name).or_insert(Vec::new());

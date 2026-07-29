@@ -1,6 +1,6 @@
 // domain map using fst, a demonstration
 
-use std::{cmp::Ordering, time::Instant};
+use std::{cmp::Ordering, collections::BTreeMap, time::Instant};
 
 use fst::raw::{Builder, Fst, Output};
 
@@ -72,7 +72,7 @@ impl DMapBuilder {
 		// to prevent memory fragmentation from lots of String alloc
 		// we read them in whole and use &str instead
 		let t0 = Instant::now();
-		let mut kv: Vec<(&[u8], u64)> = Vec::with_capacity(self.count_hint);
+		let mut kv: BTreeMap<RevOrd, u64> = BTreeMap::new();
 		for (file, prefix, v) in self.files.iter() {
 			for mut line in file.split(is_newline) {
 				line = line.trim_ascii();
@@ -98,14 +98,14 @@ impl DMapBuilder {
 					continue;
 				}
 				bytes += line.len();
-				kv.push((line, *v));
+				kv.insert(RevOrd(line), *v);
 			}
 		}
 
 		for list in self.lists.iter() {
 			for k in list.0.iter() {
 				bytes += k.len();
-				kv.push((k as &[u8], list.1));
+				kv.insert(RevOrd(k as &[u8]), list.1);
 			}
 		}
 
@@ -118,27 +118,20 @@ impl DMapBuilder {
 			t1.duration_since(t0).as_secs_f32() * 1000f32
 		);
 
-		kv.sort_by(|&a, &b| rev_cmp(a.0, b.0));
-		let t2 = Instant::now();
-		eprintln!(
-			"sorted in {:.1}ms",
-			t2.duration_since(t1).as_secs_f32() * 1000f32
-		);
-
 		let mut b = Builder::memory();
 		let mut rev = Vec::with_capacity(MAX_FQDN_LEN);
-		for (k, v) in kv.into_iter() {
+		for (&k, &v) in &kv {
 			rev.clear();
-			rev.extend(k.iter().rev().copied());
+			rev.extend(k.0.iter().rev().copied());
 			b.insert(&rev, v)?;
 		}
 		let t = b.into_fst();
-		let t3 = Instant::now();
+		let t2 = Instant::now();
 		eprintln!(
 			"built fst: {} bytes, ratio: {:.1}%, in {:.1}ms",
 			t.size(),
 			t.size() as f32 * 100f32 / bytes as f32,
-			t3.duration_since(t2).as_secs_f32() * 1000f32
+			t2.duration_since(t1).as_secs_f32() * 1000f32
 		);
 		Ok(DMap(t))
 	}
@@ -149,9 +142,20 @@ fn is_newline(b: &u8) -> bool {
 	*b == b'\n'
 }
 
-#[inline]
-fn rev_cmp(a: &[u8], b: &[u8]) -> Ordering {
-	a.iter().rev().cmp(b.iter().rev())
+// so we don't have to reverse the keys before inserting
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct RevOrd<'a>(&'a [u8]);
+
+impl<'a> PartialOrd for RevOrd<'a> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+
+impl<'a> Ord for RevOrd<'a> {
+	fn cmp(&self, other: &Self) -> Ordering {
+		self.0.iter().rev().cmp(other.0.iter().rev())
+	}
 }
 
 #[cfg(test)]
