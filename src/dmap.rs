@@ -42,7 +42,6 @@ impl<D: AsRef<[u8]>> DMap<D> {
 pub struct DMapBuilder {
 	files: Vec<(Vec<u8>, Vec<u8>, u64)>,
 	lists: Vec<(Vec<Vec<u8>>, u64)>,
-	count_hint: usize,
 }
 
 impl DMapBuilder {
@@ -55,14 +54,12 @@ impl DMapBuilder {
 			file.len(),
 			t0.elapsed().as_secs_f32() * 1000f32
 		);
-		self.count_hint += file.len() / MAX_FQDN_LEN;
 		self.files.push((file, prefix.to_vec(), v));
 		Ok(())
 	}
 
 	pub fn add_list(&mut self, list: impl IntoIterator<Item = impl AsRef<[u8]>>, v: u64) {
 		let list: Vec<_> = list.into_iter().map(|e| e.as_ref().to_vec()).collect();
-		self.count_hint += list.len();
 		self.lists.push((list, v));
 	}
 

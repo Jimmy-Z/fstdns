@@ -47,13 +47,15 @@ list of configurations:
 * `hosts <path> [domain]`
 	* `domain` is used to expand hosts
 		* like `a` in hosts will also expand to `a.lan`
-	* they're internall handles as exact a/aaaa/ptr rewrite
+	* they're internally handled as exact a/aaaa/ptr rewrite
 * `<condition> <action>` rules
 	* conditions:
 		* `domain <domain>`
 			* `foo.bar` matches `foo.bar` AND `sub.foo.bar`,
 			but not `subfoo.bar`
 			* longest match wins
+				* if the same domain is specified multiple times,
+				later ones silently overwrites prior.
 		* `domain-list <file_name>[^prefix]`
 			* similar to `domain`, each line represents a domain
 			* lines started with `#` are considered comment
@@ -63,6 +65,8 @@ list of configurations:
 		* `qtype <qtype>` dns query type
 			* a few names are supported like AAAA, SVCB, HTTPS
 			* or decimal number
+		* `exact <domain> <qtype>`
+			* (planned)
 	* actions:
 		* `NXDOMAIN`
 		* `NOTIMP`
@@ -71,7 +75,6 @@ list of configurations:
 		* `default`
 		* `rewrite <rdata>`
 			* (planned)
-			* only makes sense with exact rule
 
 examples:
 ```sh
