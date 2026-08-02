@@ -6,7 +6,7 @@ use std::{
 	str::FromStr,
 };
 
-use super::{action, dmap::DMapBuilder};
+use super::{action::ActionId, dmap::DMapBuilder};
 
 const DEFAULT_DNS_PORT: u16 = 53;
 
@@ -17,8 +17,8 @@ pub struct Conf {
 	pub listen: SocketAddr,
 	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
-	pub exact_rules: HashMap<(Vec<u8>, u16), u64>,
-	pub qtype_rules: Vec<(u16, u64)>,
+	pub exact_rules: HashMap<(Vec<u8>, u16), ActionId>,
+	pub qtype_rules: Vec<(u16, ActionId)>,
 }
 
 impl Default for Conf {
@@ -112,7 +112,7 @@ impl Conf {
 			panic!("invalid domain rule: \"{}\"", args.join(" "));
 		}
 		let action = self.inner_action(&args[1..]);
-		b.add_list([args[0]], action);
+		b.add_list([args[0]], action.into());
 	}
 
 	fn domain_list_rule(&mut self, b: &mut DMapBuilder, args: &[&str]) {
@@ -121,8 +121,8 @@ impl Conf {
 		}
 		let (path, prefix) = args[0].split_once(' ').unwrap_or((args[0], ""));
 		let action = self.inner_action(&args[1..]);
-		if let Err(e) = b.add_file(path, prefix.as_bytes(), action) {
-			panic!("error loading domain list \"{}\": {}", path, e);
+		if b.add_file(path, prefix.as_bytes(), action.into()).is_err() {
+			panic!("error loading domain list \"{}\"", path);
 		}
 	}
 
@@ -135,16 +135,16 @@ impl Conf {
 		self.qtype_rules.push((qtype, action));
 	}
 
-	fn inner_action(&mut self, args: &[&str]) -> u64 {
+	fn inner_action(&mut self, args: &[&str]) -> ActionId {
 		match args.len() {
 			0 => {
 				panic!("action not specified in rule");
 			}
 			1 => match args[0].to_ascii_lowercase().as_str() {
-				"default" => action::ACTION_DEFAULT,
-				"nxdomain" => action::ACTION_NXDOMAIN,
-				"notimp" => action::ACTION_NOTIMP,
-				"refused" => action::ACTION_REFUSED,
+				"default" => ActionId::Default,
+				"nxdomain" => ActionId::NxDomain,
+				"notimp" => ActionId::NotImp,
+				"refused" => ActionId::Refused,
 				_ => {
 					panic!("invalid action \"{}\"", args[0]);
 				}
@@ -158,18 +158,17 @@ impl Conf {
 		}
 	}
 
-	fn inner_alt(&mut self, args: &[&str]) -> u64 {
+	fn inner_alt(&mut self, args: &[&str]) -> ActionId {
 		if args.is_empty() {
-			panic!("empty upstream spec");
+			panic!("empty alternative upstream spec");
 		}
-		let alt: Vec<SocketAddr> = args.iter().map(parse_addr).collect();
+		let mut alt: Vec<SocketAddr> = args.iter().map(parse_addr).collect();
+		alt.sort();
 		if let Some(i) = self.alts.iter().position(|e| e == &alt) {
-			action::u64_from_alt(i as u8)
-		} else if self.alts.len() < u8::MAX as usize {
-			self.alts.push(alt);
-			action::u64_from_alt((self.alts.len() - 1) as u8)
+			ActionId::from_alt_id(i).unwrap()
 		} else {
-			panic!("too much");
+			self.alts.push(alt);
+			ActionId::from_alt_id(self.alts.len() - 1).unwrap_or_else(|| panic!("too many alts"))
 		}
 	}
 }

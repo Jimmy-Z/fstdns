@@ -3,8 +3,11 @@
 use std::{cmp::Ordering, collections::BTreeMap, time::Instant};
 
 use fst::raw::{Builder, Fst, Output};
+use log::*;
 
-pub use fst::Result;
+use misc::Pretty;
+
+use super::*;
 
 pub struct DMap<D>(Fst<D>);
 
@@ -22,12 +25,12 @@ impl<D: AsRef<[u8]>> DMap<D> {
 				node = self.0.node(trans.addr);
 				if node.is_final() && (i == 0 || b[i - 1] == b'.') {
 					last_match = Some(out.cat(node.final_output()).value());
-					eprintln!(
+					trace!(
 						"found match for \"{}\", {} at pos {} ({})",
-						unsafe { str::from_utf8_unchecked(b) },
+						Pretty(b),
 						last_match.unwrap(),
 						i,
-						unsafe { str::from_utf8_unchecked(&b[i..]) }
+						Pretty(&b[i..])
 					);
 				}
 			} else {
@@ -45,10 +48,11 @@ pub struct DMapBuilder {
 }
 
 impl DMapBuilder {
-	pub fn add_file(&mut self, path: &str, prefix: &[u8], v: u64) -> Result<()> {
+	pub fn add_file(&mut self, path: &str, prefix: &[u8], v: u64) -> Dummy {
 		let t0 = Instant::now();
-		let file = std::fs::read(path)?;
-		eprintln!(
+		let file =
+			std::fs::read(path).map_err(|e| error!("failed to read file \"{path}\": {e}"))?;
+		info!(
 			"loaded \"{}\", {} bytes, in {}ms",
 			path,
 			file.len(),
@@ -63,7 +67,7 @@ impl DMapBuilder {
 		self.lists.push((list, v));
 	}
 
-	pub fn build(self) -> Result<DMap<Vec<u8>>> {
+	pub fn build(self) -> DummyResult<DMap<Vec<u8>>> {
 		let mut bytes = 0;
 		// we have to sort them, not storing them all in memory is HARD
 		// to prevent memory fragmentation from lots of String alloc
@@ -78,7 +82,7 @@ impl DMapBuilder {
 				}
 				if !prefix.is_empty() {
 					if line.len() < prefix.len() || &line[..prefix.len()] != prefix {
-						eprintln!(
+						error!(
 							"unexpected line, no prefix ({}): \"{}\"",
 							str::from_utf8(prefix).unwrap(),
 							str::from_utf8(line).unwrap()
@@ -87,7 +91,7 @@ impl DMapBuilder {
 					line = &line[prefix.len()..];
 				}
 				if line.len() > MAX_FQDN_LEN {
-					eprintln!(
+					error!(
 						"unexpected line, too long ({}): \"{}\"",
 						line.len(),
 						str::from_utf8(line).unwrap()
@@ -108,7 +112,7 @@ impl DMapBuilder {
 
 		let t1 = Instant::now();
 		bytes += kv.len(); // counting delimiters
-		eprintln!(
+		info!(
 			"parsed {} domains, {} bytes, in {:.1}ms",
 			kv.len(),
 			bytes,
@@ -120,7 +124,8 @@ impl DMapBuilder {
 		for (&k, &v) in &kv {
 			rev.clear();
 			rev.extend(k.0.iter().rev().copied());
-			b.insert(&rev, v)?;
+			b.insert(&rev, v)
+				.map_err(|e| error!("fst insertion error on key \"{}\": {e}", Pretty(k.0)))?;
 		}
 		let t = b.into_fst();
 		let t2 = Instant::now();
@@ -195,10 +200,33 @@ mod tests {
 		let _ = b.build().unwrap();
 	}
 
-	// test a list using hashmap as control
+	// you probably want to test this with a release build since it's slow
+	// cargo test --release test_match_lst_macro -- --ignored --no-capture
+	// test result show
 	#[test]
 	#[ignore]
-	fn test_match_lst() {
+	fn test_match_lst_macro() {
+		for &m in &[
+			0xffffffffffffffff,
+			0xffffffff,
+			0x00ffffff,
+			0x0000ffff,
+			0x00000fff,
+			0x000000ff,
+			0x0000ff00,
+			0x00ff0000,
+			0xff000000,
+			0x000000ff,
+			0x0000000f,
+			0x00000001,
+		] {
+			eprintln!("=== test with mask {m:x} ===");
+			test_match_lst_with_mask(m);
+		}
+	}
+
+	// test a list using hashmap as control
+	fn test_match_lst_with_mask(mask: u64) {
 		// build fst and control
 		let mut b = DMapBuilder::default();
 		let mut h = HashMap::new();
@@ -208,14 +236,14 @@ mod tests {
 		while r.read_until(b'\n', &mut l).unwrap() > 0 {
 			let mut n = l.trim_ascii();
 			if n.is_empty() || n[0] == b'#' {
-				eprintln!("skipped empty line / comment: {}", unsafe {
+				trace!("skipped empty line / comment: {}", unsafe {
 					str::from_utf8_unchecked(n)
 				});
 				l.clear();
 				continue;
 			}
 			if &n[0..DOMAIN_LST_PRE.len()] != DOMAIN_LST_PRE {
-				eprintln!("unexpected line: {:?}", unsafe {
+				trace!("unexpected line: {:?}", unsafe {
 					str::from_utf8_unchecked(n)
 				});
 				l.clear();
@@ -227,7 +255,7 @@ mod tests {
 				let mut h = std::hash::DefaultHasher::new();
 				n.hash(&mut h);
 				h.finish()
-			};
+			} & mask;
 			b.add_list([n], v);
 			h.insert(n.to_vec(), v);
 			c += 1;

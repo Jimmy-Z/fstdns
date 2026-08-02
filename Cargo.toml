@@ -8,9 +8,11 @@ itertools = "*"
 env_logger = "*"
 log = {version = "*", features = ["release_max_level_debug"]}
 
-tokio = {version = "1"}
+tokio = {version = "1", features = ["macros", "rt", "io-util", "net", "time"]}
 fst = "*"
+
 dns = { path = "../bbdnsp" }
+misc = { path = "../misc" }
 
 [dev-dependencies]
 rand = "*"

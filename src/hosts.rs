@@ -51,11 +51,11 @@ pub fn parse_hosts(
 			let name = CVec63::from(name);
 			match addr {
 				IpAddr::V4(a) => {
-					let v = hosts4.entry(name).or_insert(Vec::new());
+					let v = hosts4.entry(name).or_default();
 					v.push(a);
 				}
 				IpAddr::V6(a) => {
-					let v = hosts6.entry(name).or_insert(Vec::new());
+					let v = hosts6.entry(name).or_default();
 					v.push(a);
 				}
 			}
@@ -68,7 +68,7 @@ pub fn parse_hosts(
 mod tests {
 	use std::collections::HashMap;
 
-use super::parse_hosts;
+	use super::parse_hosts;
 
 	#[test]
 	fn test_parse() {
