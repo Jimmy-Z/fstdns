@@ -1,6 +1,6 @@
 FST based ad blocking DNS forwarder
 
-# CAUTION, WIP, this document is a plan, nothing is actually written yet
+WIP, this document is just a plan, nothing is actually written
 
 ### why?
 dnsmasq handles large domain list rather poorly,

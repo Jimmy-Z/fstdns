@@ -56,6 +56,8 @@ async fn main() -> Dummy {
 		info!("default upstream: {}", conf.default.iter().join(" "));
 	}
 
+	conf.finalize();
+
 	let s = UdpSocket::bind(conf.listen)
 		.await
 		.inspect_err(|e| error!("failed to listen on {}: {e}", conf.listen))?;
@@ -65,10 +67,11 @@ async fn main() -> Dummy {
 	let c = Rc::new(conf);
 	let mut buf = Vec::with_capacity(MSG_BUF_LEN_DEF);
 	loop {
+		buf.clear();
 		let (len, addr) = s.recv_buf_from(&mut buf).await?;
-		eprintln!("{len} bytes, {addr}, buf: \n{:?}", Pretty(&buf[..]));
+		eprintln!("{len} bytes from {addr}:\n{:?}", Pretty(&buf[..]));
 		// this is not spawn
-		// since some queries are handled entirely by rule in memory
+		// since some queries are handled directly by rule in memory
 		handle(&s, addr, &mut buf, &c, &dmap).await;
 	}
 }
@@ -86,27 +89,48 @@ async fn handle(
 			"error parsing message header: {e:?}\n{:?}",
 			Pretty(buf.as_slice())
 		);
-		buf.clear();
 		return;
 	}
 	let mut msg = msg.unwrap();
 	let q = msg.get_query();
 	if let Err(e) = q {
 		warn!("error parsing query: {e:?}\n{:?}", Pretty(buf.as_slice()));
-		buf.clear();
 		return;
 	}
-	let q = q.unwrap();
-	let action = {
-		// exact rules
-		if let Some(a) = conf.exact_rules.get(&(q.name, q.qtype)) {
-			*a
-			// } else if let Some(a) = conf.qtype_rules.get(q.qtype) {
-			// 	return handle_action(s, addr, msg, buf, a, conf, dmap).await;
-		} else {
-			// to do: other rules
-			ActionId::Default
+	let mut q = q.unwrap();
+	let action = 'blk: {
+		// to do: chaos
+		if q.qclass != QClass::IN {
+			break 'blk ActionId::NotImp;
 		}
+		// exact rules
+		// yeah looks quirky but the other option is to pull in hashbrown::Equivalent
+		let k = (q.name, q.qtype);
+		if let Some(a) = conf.exact_rules.get(&k) {
+			break 'blk *a;
+		}
+		// gives back the moved member, hopefully this gets optimized out
+		q.name = k.0;
+		// unqualified
+		if let Some(a) = conf.unqualified_rule
+			&& unqualified(q.name.as_ref())
+		{
+			break 'blk a;
+		}
+		// qtype rules
+		if let Ok(i) = conf.qtype_rules.binary_search_by_key(&q.qtype, |k| k.0) {
+			break 'blk conf.qtype_rules[i].1;
+		}
+		// domain rules
+		if let Some(v) = dmap.get(q.name.as_ref()) {
+			if let Ok(a) = ActionId::try_from(v) {
+				break 'blk a;
+			} else {
+				error!("");
+				break 'blk ActionId::ServFail;
+			}
+		}
+		ActionId::Default
 	};
 	let upstream = match action {
 		// to do: random or round robin
@@ -115,6 +139,7 @@ async fn handle(
 		a => {
 			let rcode = match a {
 				ActionId::NotImp => RCode::NOTIMP,
+				ActionId::ServFail => RCode::SERVFAIL,
 				ActionId::NxDomain => RCode::NXDOMAIN,
 				ActionId::Refused => RCode::REFUSED,
 				_ => unreachable!(),
@@ -128,9 +153,14 @@ async fn handle(
 	};
 	let s = s.clone();
 	let b = buf.clone();
-	let c = conf.clone();
+	let c = conf.clone(); // conf is required for addr rules
 	tokio::task::spawn_local(handle_upstream(s, b, upstream, c));
-	buf.clear();
 }
 
-async fn handle_upstream(s: Rc<UdpSocket>, buf: Vec<u8>, upstream: SocketAddr, conf: Rc<Conf>) {}
+async fn handle_upstream(s: Rc<UdpSocket>, buf: Vec<u8>, upstream: SocketAddr, conf: Rc<Conf>) {
+	todo!()
+}
+
+fn unqualified(n: &[u8]) -> bool {
+	!n.contains(&b'.')
+}

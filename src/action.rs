@@ -1,11 +1,13 @@
 use std::fmt::Display;
 
-// although fst uses a fixed u64 value time
-// test shows smaller values achieves better compression
+// although fst uses fixed size (u64) values
+// tests show smaller values achieves better compression
 // a previous design fully utilizing u64 was scrapped
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Default)]
 pub enum ActionId {
+	#[default]
 	Default,
+	ServFail,
 	NxDomain,
 	NotImp,
 	Refused,
@@ -14,11 +16,13 @@ pub enum ActionId {
 
 impl ActionId {
 	const DEFAULT: u64 = 0;
+	const SERVFAIL: u64 = 2;
 	const NXDOMAIN: u64 = 3;
 	const NOTIMP: u64 = 4;
 	const REFUSED: u64 = 5;
 
 	const DEFAULT_STR: &str = "default";
+	const SERVFAIL_STR: &str = "servfail";
 	const NXDOMAIN_STR: &str = "nxdomain";
 	const NOTIMP_STR: &str = "notimp";
 	const REFUSED_STR: &str = "refused";
@@ -41,6 +45,7 @@ impl Display for ActionId {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Default => write!(f, "{}", Self::DEFAULT_STR),
+			Self::ServFail => write!(f, "{}", Self::SERVFAIL_STR),
 			Self::NxDomain => write!(f, "{}", Self::NXDOMAIN_STR),
 			Self::NotImp => write!(f, "{}", Self::NOTIMP_STR),
 			Self::Refused => write!(f, "{}", Self::REFUSED_STR),
@@ -54,6 +59,7 @@ impl TryFrom<&str> for ActionId {
 	fn try_from(v: &str) -> Result<Self, Self::Error> {
 		match v {
 			Self::DEFAULT_STR => Ok(Self::Default),
+			Self::SERVFAIL_STR => Ok(Self::ServFail),
 			Self::NXDOMAIN_STR => Ok(Self::NxDomain),
 			Self::NOTIMP_STR => Ok(Self::NotImp),
 			Self::REFUSED_STR => Ok(Self::Refused),
@@ -66,6 +72,7 @@ impl From<ActionId> for u64 {
 	fn from(a: ActionId) -> Self {
 		match a {
 			ActionId::Default => ActionId::DEFAULT,
+			ActionId::ServFail => ActionId::SERVFAIL,
 			ActionId::NxDomain => ActionId::NXDOMAIN,
 			ActionId::NotImp => ActionId::NOTIMP,
 			ActionId::Refused => ActionId::NOTIMP,
@@ -79,6 +86,7 @@ impl TryFrom<u64> for ActionId {
 	fn try_from(v: u64) -> Result<Self, Self::Error> {
 		match v {
 			Self::DEFAULT => Ok(Self::Default),
+			Self::SERVFAIL => Ok(Self::ServFail),
 			Self::NXDOMAIN => Ok(Self::NxDomain),
 			Self::NOTIMP => Ok(Self::NotImp),
 			Self::REFUSED => Ok(Self::Refused),

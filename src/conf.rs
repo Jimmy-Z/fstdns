@@ -6,6 +6,8 @@ use std::{
 	str::FromStr,
 };
 
+use smart_default::SmartDefault;
+
 use dns::{CVec63, QType};
 
 use super::{action::ActionId, dmap::DMapBuilder};
@@ -15,24 +17,16 @@ const DEFAULT_DNS_PORT: u16 = 53;
 const DEFAULT_LISTEN_ADDR: SocketAddr =
 	SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), DEFAULT_DNS_PORT);
 
+#[derive(SmartDefault)]
 pub struct Conf {
+	#[default(DEFAULT_LISTEN_ADDR)]
 	pub listen: SocketAddr,
 	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
 	pub exact_rules: HashMap<(CVec63, QType), ActionId>,
+	pub unqualified_rule: Option<ActionId>,
 	pub qtype_rules: Vec<(QType, ActionId)>,
-}
-
-impl Default for Conf {
-	fn default() -> Self {
-		Self {
-			listen: DEFAULT_LISTEN_ADDR,
-			default: Vec::new(),
-			alts: Vec::new(),
-			exact_rules: HashMap::new(),
-			qtype_rules: Vec::new(),
-		}
-	}
+	pub addr_rules: HashMap<IpAddr, ActionId>,
 }
 
 impl Conf {
@@ -70,6 +64,10 @@ impl Conf {
 				panic!("unrecognized conf line: \"{}\"", l);
 			}
 		}
+	}
+
+	pub fn finalize(&mut self) {
+		self.qtype_rules.sort_by_key(|e| e.0);
 	}
 
 	fn upstream(&mut self, args: &[&str]) {

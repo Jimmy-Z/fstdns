@@ -7,6 +7,7 @@ edition = "2024"
 itertools = "*"
 env_logger = "*"
 log = {version = "*", features = ["release_max_level_debug"]}
+smart-default = "*"
 
 tokio = {version = "1", features = ["macros", "rt", "io-util", "net", "time"]}
 fst = "*"
