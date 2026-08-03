@@ -26,7 +26,10 @@ yeah I know this is over-engineering, but, just to scratch an itch.
 
 ### other functions
 * alternative upstream server for matching domains
+	* this is also available on dnsmasq
+* retry on a different upstream if answer matches a condition
 * block queries by QTYPE
+* more in config
 
 ### missing features
 * cache
@@ -54,8 +57,8 @@ list of configurations:
 			* `foo.bar` matches `foo.bar` AND `sub.foo.bar`,
 			but not `subfoo.bar`
 			* longest match wins
-				* if the same domain is specified multiple times,
-				later ones silently overwrites prior.
+			* if the same domain is specified multiple times,
+			later ones silently overwrites prior.
 		* `domain-list <file_name>[^prefix]`
 			* similar to `domain`, each line represents a domain
 			* lines started with `#` are considered comment
@@ -65,9 +68,12 @@ list of configurations:
 		* `qtype <qtype>` dns query type
 			* a few names are supported like AAAA, SVCB, HTTPS
 			* or decimal number
+		* `addr <addr>`
+			* answer (from a previously chosen upstream) matches this address
+			* v4 or v6
 		* `exact <domain> <qtype>`
 			* (planned)
-	* actions:
+	* actions,
 		* `NXDOMAIN`
 		* `NOTIMP`
 		* `REFUSED`
@@ -81,11 +87,11 @@ examples:
 # use unprivileged port for debugging
 listen 127.0.0.1:1053
 # set default upstream
-default 1.1.1.1 1.0.0.1
+default 2.2.2.2
 # read hosts and expand with domain `lan`
 hosts /etc/hosts lan
 # use alternative upstream for domains listed in that file
-domain-list /etc/list alt 8.8.8.8 8.8.4.4
+domain-list /etc/list alt 3.3.3.3
 # block these domains
 # `^*.` handles oisd _domainswild_ list intended for FreshTomato
 domain-list /etc/oisd^*. nxdomain
@@ -99,6 +105,8 @@ unqualified alt 192.168.0.1
 qtype https notimp
 # let dnsmasq resolve ptr for 192.168.0.0/24
 domain 0.168.192.in-addr.arpa alt 192.168.0.1
+# counter dns poisoning for known poisonous answers
+addr 1.2.3.4 alt 1.1.1.1
 ```
 due to the weak parser, strange file names (contains space or ^) might not work.
 

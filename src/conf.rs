@@ -6,6 +6,8 @@ use std::{
 	str::FromStr,
 };
 
+use dns::{CVec63, QType};
+
 use super::{action::ActionId, dmap::DMapBuilder};
 
 const DEFAULT_DNS_PORT: u16 = 53;
@@ -17,8 +19,8 @@ pub struct Conf {
 	pub listen: SocketAddr,
 	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
-	pub exact_rules: HashMap<(Vec<u8>, u16), ActionId>,
-	pub qtype_rules: Vec<(u16, ActionId)>,
+	pub exact_rules: HashMap<(CVec63, QType), ActionId>,
+	pub qtype_rules: Vec<(QType, ActionId)>,
 }
 
 impl Default for Conf {
@@ -130,7 +132,7 @@ impl Conf {
 		if args.len() < 2 {
 			panic!("invalid qtype rule: \"{}\"", args.join(" "));
 		}
-		let qtype = parse_qtype(args[0]);
+		let qtype = QType::try_from(args[0]).unwrap();
 		let action = self.inner_action(&args[1..]);
 		self.qtype_rules.push((qtype, action));
 	}
@@ -182,14 +184,5 @@ fn parse_addr(a: impl AsRef<str>) -> SocketAddr {
 			Ok(a) => SocketAddr::new(a, DEFAULT_DNS_PORT),
 			Err(e) => panic!("error parsing address \"{}\": {}", a, e),
 		}
-	}
-}
-
-fn parse_qtype(q: &str) -> u16 {
-	match q.to_ascii_lowercase().as_str() {
-		"aaaa" => 28,
-		"svcb" => 64,
-		"https" => 65,
-		_ => u16::from_str(q).unwrap_or_else(|e| panic!("invalid query type \"{}\": {}", q, e)),
 	}
 }

@@ -3,7 +3,7 @@ use std::fmt::Display;
 // although fst uses a fixed u64 value time
 // test shows smaller values achieves better compression
 // a previous design fully utilizing u64 was scrapped
-#[derive(Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 pub enum ActionId {
 	Default,
 	NxDomain,
