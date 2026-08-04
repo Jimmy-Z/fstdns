@@ -50,7 +50,7 @@ list of configurations:
 * `hosts <path> [domain]`
 	* `domain` is used to expand hosts
 		* like `a` in hosts will also expand to `a.lan`
-	* they're internally handled as exact a/aaaa/ptr rewrite
+	* internally handled as exact a/aaaa/ptr rewrites
 * `<condition> <action>` rules
 	* conditions:
 		* `domain <domain>`
@@ -94,6 +94,8 @@ hosts /etc/hosts lan
 domain-list /etc/list alt 3.3.3.3
 # block these domains
 # `^*.` handles oisd _domainswild_ list intended for FreshTomato
+# this is to explain how prefix handling works
+# oisd also has a _domainswild2_ list which can be used directly
 domain-list /etc/oisd^*. nxdomain
 # stop lan queries from leaking to the internet/isp
 domain lan nxdomain
