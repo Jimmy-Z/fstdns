@@ -21,7 +21,9 @@ impl ActionId {
 	pub const ALT_STR: &str = "alt";
 	pub const REWRITE_STR: &str = "rewrite";
 
-	// 16 different alternative upstreams ought to be enough for anybody
+	const RCODE_BASE: u64 = 0x01;
+	const RCODE_CAP: u64 = 0x10; //exclusive
+	// 16 different alternative upstreams and rewrites ought to be enough for anybody
 	const ALT_BASE: u64 = 0x10;
 	const ALT_CAP: u64 = 0x20; //exclusive
 	const REWRITE_BASE: u64 = 0x20;
@@ -81,7 +83,7 @@ impl TryFrom<u64> for ActionId {
 	fn try_from(v: u64) -> Result<Self, Self::Error> {
 		match v {
 			Self::DEFAULT => Ok(Self::Default),
-			1..16 => Ok(Self::RCode(RCode(v as u8))),
+			Self::RCODE_BASE..Self::RCODE_CAP => Ok(Self::RCode(RCode(v as u8))),
 			Self::ALT_BASE..Self::ALT_CAP => Ok(Self::Alt((v - Self::ALT_BASE) as u8)),
 			Self::REWRITE_BASE..Self::REWRITE_CAP => {
 				Ok(Self::Rewrite((v - Self::REWRITE_BASE) as u8))

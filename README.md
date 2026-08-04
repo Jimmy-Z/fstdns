@@ -1,6 +1,6 @@
-FST based ad blocking DNS forwarder
-
 WIP, this document is just a plan, nothing is actually written
+
+FST based ad blocking DNS forwarder
 
 ### why?
 dnsmasq handles large domain list rather poorly,

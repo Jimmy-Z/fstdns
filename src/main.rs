@@ -1,8 +1,12 @@
-use std::{collections::HashMap, fs::File, net::SocketAddr, rc::Rc};
+use std::{
+	fs::File,
+	net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
+	rc::Rc,
+};
 
 use itertools::Itertools as _;
 use log::*;
-use tokio::net::UdpSocket;
+use tokio::{net::UdpSocket, time::timeout};
 
 use dns::*;
 use misc::*;
@@ -134,8 +138,8 @@ async fn handle(
 	};
 	let upstream = match action {
 		// to do: random or round robin
-		ActionId::Default => conf.default[0],
-		ActionId::Alt(i) => conf.alts[i as usize][0],
+		ActionId::Default => conf.default.clone(),
+		ActionId::Alt(i) => conf.alts[i as usize].clone(),
 		ActionId::RCode(c) => {
 			msg.deny(c);
 			if let Err(e) = s.send_to(buf, addr).await {
@@ -144,17 +148,64 @@ async fn handle(
 			return;
 		}
 		ActionId::Rewrite(i) => {
-			todo!()
+			msg.answer(&conf.rewrites[i as usize]);
+			if let Err(e) = s.send_to(buf, addr).await {
+				warn!("error sending response to {addr}: {e}");
+			}
+			return;
 		}
 	};
 	let s = s.clone();
 	let b = buf.clone();
 	let c = conf.clone(); // conf is required for addr rules
-	tokio::task::spawn_local(handle_upstream(s, b, upstream, c));
+	tokio::task::spawn_local(handle_upstream(s, addr, b, upstream, c));
 }
 
-async fn handle_upstream(s: Rc<UdpSocket>, buf: Vec<u8>, upstream: SocketAddr, conf: Rc<Conf>) {
-	todo!()
+const DEFAULT_BIND_V4: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
+const DEFAULT_BIND_V6: SocketAddr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0);
+
+async fn handle_upstream(
+	c: Rc<UdpSocket>,
+	c_addr: SocketAddr,
+	query: Vec<u8>,
+	upstream: Vec<SocketAddr>,
+	conf: Rc<Conf>,
+) -> Result<(), ()> {
+	// to do: choose address randomly and retry on others
+	let u_addr = upstream[0];
+	let u = UdpSocket::bind(match u_addr {
+		SocketAddr::V4(_) => DEFAULT_BIND_V4,
+		SocketAddr::V6(_) => DEFAULT_BIND_V6,
+	})
+	.await
+	.map_err(|e| error!("error binding udp socket for upstream: {e}"))?;
+	u.connect(u_addr)
+		.await
+		.map_err(|e| error!("error connecting to upstream: {e}"))?;
+	u.send(&query)
+		.await
+		.map_err(|e| error!("error sending query to upstream: {e}"))?;
+
+	let mut answer = Vec::with_capacity(MSG_BUF_LEN_DEF);
+	match timeout(conf.timeout, u.recv_buf(&mut answer)).await {
+		Ok(Ok(len)) => trace!("{len} bytes from upstream"),
+		Ok(Err(e)) => {
+			warn!("error receiving answer from upstream: {e}");
+			return Err(());
+		}
+		Err(e) => {
+			warn!("timeout waiting for upstream: {e}");
+			return Err(());
+		}
+	}
+
+	// to do: addr rule
+
+	c.send_to(&answer, c_addr)
+		.await
+		.map_err(|e| error!("error sending answer back to client: {e}"))?;
+
+	Ok(())
 }
 
 fn unqualified(n: &[u8]) -> bool {

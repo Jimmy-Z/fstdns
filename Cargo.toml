@@ -15,8 +15,8 @@ fst = "*"
 dns = { path = "../bbdnsp" }
 misc = { path = "../misc" }
 
-[dev-dependencies]
-rand = "*"
-
 [build-dependencies]
 misc = { path = "../misc" }
+
+[dev-dependencies]
+rand = "*"

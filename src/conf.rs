@@ -4,6 +4,7 @@ use std::{
 	io::{BufRead as _, BufReader},
 	net::{IpAddr, Ipv4Addr, SocketAddr},
 	str::FromStr,
+	time::Duration,
 };
 
 use smart_default::SmartDefault;
@@ -17,13 +18,20 @@ const DEFAULT_DNS_PORT: u16 = 53;
 const DEFAULT_LISTEN_ADDR: SocketAddr =
 	SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), DEFAULT_DNS_PORT);
 
+const DEFAULT_TIMEOUT: Duration = Duration::from_millis(2501);
+
 #[derive(SmartDefault)]
 pub struct Conf {
 	#[default(DEFAULT_LISTEN_ADDR)]
 	pub listen: SocketAddr,
+
+	#[default(DEFAULT_TIMEOUT)]
+	pub timeout: Duration,
+
 	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
 	pub rewrites: Vec<Vec<Answer>>,
+
 	pub exact_rules: HashMap<(CVec63, QType), ActionId>,
 	pub unqualified_rule: Option<ActionId>,
 	pub qtype_rules: Vec<(QType, ActionId)>,
