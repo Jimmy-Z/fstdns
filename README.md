@@ -1,5 +1,3 @@
-WIP, this document is just a plan, nothing is actually written
-
 FST based ad blocking DNS forwarder
 
 ### why?
@@ -41,46 +39,44 @@ yeah I know this is over-engineering, but, just to scratch an itch.
 ### config
 takes one parameter: path to a conf file,
 list of configurations:
-* `listen`, default to `0.0.0.0:53`
+- [x] `listen`, default to `0.0.0.0:53`
 	* if specified multiple times, newer overwrites older
-* `default`, default upstream when no rules match
-* `resolv-conf <path>`, get upstream from resolv conf
+- [x] `default`, default upstream when no rules match
+- [x] `resolv-conf <path>`, get upstream from resolv conf
 	* if specified multiple times, newer overwrites older
 	* `default` and `resolv-conf ...` overwrites each other
-* `hosts <path> [domain]`
+- [ ] `hosts <path> [domain]`
 	* `domain` is used to expand hosts
 		* like `a` in hosts will also expand to `a.lan`
 	* internally handled as exact a/aaaa/ptr rewrites
 * `<condition> <action>` rules
 	* conditions:
-		* `domain <domain>`
+		- [x] `domain <domain>`
 			* `foo.bar` matches `foo.bar` AND `sub.foo.bar`,
 			but not `subfoo.bar`
 			* longest match wins
 			* if the same domain is specified multiple times,
 			later ones silently overwrites prior.
-		* `domain-list <file_name>[^prefix]`
+		- [x] `domain-list <file_name>[^prefix]`
 			* similar to `domain`, each line represents a domain
 			* lines started with `#` are considered comment
 			* expect each domain to be prefixed with `<prefix>`,
 			when specified
-		* `unqualified` for name without any dots
-		* `qtype <qtype>` dns query type
+		- [x] `qtype <qtype>` dns query type
 			* a few names are supported like AAAA, SVCB, HTTPS
 			* or decimal number
-		* `addr <addr>`
+		- [ ] `addr <addr>`
 			* answer (from a previously chosen upstream) matches this address
 			* v4 or v6
-		* `exact <domain> <qtype>`
-			* (planned)
+		- [ ] `unqualified` for names without any dots
+		- [ ] `exact <domain> <qtype>`
 	* actions,
-		* `NXDOMAIN`
-		* `NOTIMP`
-		* `REFUSED`
-		* `alt ...`
-		* `default`
-		* `rewrite <rdata>`
-			* (planned)
+		- [x] `NXDOMAIN`
+		- [x] `NOTIMP`
+		- [x] `REFUSED`
+		- [x] `alt ...`
+		- [x] `default`
+		- [ ] `rewrite <rdata>`
 
 examples:
 ```sh

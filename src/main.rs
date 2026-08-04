@@ -103,16 +103,16 @@ async fn handle(
 		return;
 	}
 	let mut q = q.unwrap();
-	let action = 'blk: {
+	let action = 'rules: {
 		// to do: chaos
 		if q.qclass != QClass::IN {
-			break 'blk ActionId::RCode(RCode::NOTIMP);
+			break 'rules ActionId::RCode(RCode::NOTIMP);
 		}
 		// exact rules
 		// yeah looks quirky but the other option is to pull in hashbrown::Equivalent
 		let k = (q.name, q.qtype);
 		if let Some(a) = conf.exact_rules.get(&k) {
-			break 'blk *a;
+			break 'rules *a;
 		}
 		// gives back the moved member, hopefully this gets optimized out
 		q.name = k.0;
@@ -120,89 +120,129 @@ async fn handle(
 		if let Some(a) = conf.unqualified_rule
 			&& unqualified(q.name.as_ref())
 		{
-			break 'blk a;
+			break 'rules a;
 		}
 		// qtype rules
 		if let Ok(i) = conf.qtype_rules.binary_search_by_key(&q.qtype, |k| k.0) {
-			break 'blk conf.qtype_rules[i].1;
+			break 'rules conf.qtype_rules[i].1;
 		}
 		// domain rules
 		if let Some(v) = dmap.get(q.name.as_ref()) {
 			if let Ok(a) = ActionId::try_from(v) {
-				break 'blk a;
+				break 'rules a;
 			} else {
 				error!("");
-				break 'blk ActionId::RCode(RCode::SERVFAIL);
+				break 'rules ActionId::RCode(RCode::SERVFAIL);
 			}
 		}
 		ActionId::Default
 	};
-	let upstream = match action {
-		// to do: random or round robin
-		ActionId::Default => conf.default.clone(),
-		ActionId::Alt(i) => conf.alts[i as usize].clone(),
+	if let Some(upstream_id) = action.to_upstream_id() {
+		let s = s.clone();
+		let b = buf.clone();
+		let c = conf.clone(); // conf is required for addr rules
+		tokio::task::spawn_local(handle_upstream(s, addr, b, upstream_id, c));
+	} else {
+		handle_local_action(&mut msg, action, conf);
+		if let Err(e) = s.send_to(buf, addr).await {
+			warn!("error sending response to {addr}: {e}");
+		}
+	}
+}
+
+fn handle_local_action(msg: &mut Msg, action: ActionId, conf: &Rc<Conf>) {
+	match action {
 		ActionId::RCode(c) => {
 			msg.deny(c);
-			if let Err(e) = s.send_to(buf, addr).await {
-				warn!("error sending response to {addr}: {e}");
-			}
-			return;
 		}
 		ActionId::Rewrite(i) => {
 			msg.answer(&conf.rewrites[i as usize]);
-			if let Err(e) = s.send_to(buf, addr).await {
-				warn!("error sending response to {addr}: {e}");
-			}
-			return;
 		}
-	};
-	let s = s.clone();
-	let b = buf.clone();
-	let c = conf.clone(); // conf is required for addr rules
-	tokio::task::spawn_local(handle_upstream(s, addr, b, upstream, c));
+		_ => unreachable!(),
+	}
 }
 
 async fn handle_upstream(
 	c: Rc<UdpSocket>,
 	c_addr: SocketAddr,
-	mut query: Vec<u8>,
-	upstream: Vec<SocketAddr>,
+	query: Vec<u8>,
+	upstream_id: Option<u8>,
 	conf: Rc<Conf>,
 ) -> Result<(), ()> {
 	let mut answer = Vec::with_capacity(MSG_BUF_LEN_DEF);
 	// to do: shuffle upstream
-	for &u in upstream.iter() {
-		let r = handle_upstream_inner(&query, &mut answer, u, conf.timeout).await;
-		match r {
-			Ok(()) => break,
-			Err(true) => continue,
-			Err(false) => break,
+	handle_upstream_inner(&mut answer, &query, upstream_id, &conf).await;
+	if answer.is_empty() {
+		return Err(());
+	}
+
+	// addr rule
+	let mut msg =
+		Msg::try_from(&mut answer).map_err(|e| warn!("invalid header in answer: {e:?}"))?;
+	let _ = msg
+		.get_query()
+		.map_err(|e| warn!("invalid query in answer: {e:?}"))?;
+	let mut action = None;
+	for _ in 0..msg.an_count() {
+		let answer = msg
+			.next_answer()
+			.map_err(|e| warn!("invalid answer in answer: {e:?}"))?;
+		if let Some(addr) = match answer.rdata {
+			RData::A(a) => Some(IpAddr::V4(a)),
+			RData::AAAA(aaaa) => Some(IpAddr::V6(aaaa)),
+			_ => None,
+		} && let Some(a) = conf.addr_rules.get(&addr)
+		{
+			action = Some(*a);
+			break;
 		}
 	}
-	// to do: addr rule
-	// to do: upstream stats
+	if let Some(action) = action {
+		if let Some(upstream_id) = action.to_upstream_id() {
+			handle_upstream_inner(&mut answer, &query, upstream_id, &conf).await;
+		} else {
+			error!("action {action} for answer addr condition is not implemented yet");
+			return Ok(());
+		}
+	}
 
 	if !answer.is_empty() {
 		c.send_to(&answer, c_addr)
-			.await
-			.map_err(|e| error!("error sending answer back to client: {e}"))?;
-	} else {
-		let mut msg = Msg::try_from(&mut query).unwrap();
-		msg.deny(RCode::SERVFAIL);
-		c.send_to(&query, c_addr)
 			.await
 			.map_err(|e| error!("error sending answer back to client: {e}"))?;
 	}
 	Ok(())
 }
 
+async fn handle_upstream_inner(
+	answer: &mut Vec<u8>,
+	query: &[u8],
+	upstream_id: Option<u8>,
+	conf: &Rc<Conf>,
+) {
+	let upstream = match upstream_id {
+		Some(i) => &conf.alts[i as usize],
+		None => &conf.default,
+	};
+	// to do: upstream stats
+	// to do: choice based on stats
+	for &u in upstream.iter() {
+		let r = handle_upstream_inner_inner(answer, query, u, conf.timeout).await;
+		match r {
+			Ok(()) => break,
+			Err(true) => continue,
+			Err(false) => break,
+		}
+	}
+}
+
 const DEFAULT_BIND_V4: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
 const DEFAULT_BIND_V6: SocketAddr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0);
 
 // the error indicates should retry (next address) or not
-async fn handle_upstream_inner(
-	query: &[u8],
+async fn handle_upstream_inner_inner(
 	answer: &mut Vec<u8>,
+	query: &[u8],
 	upstream: SocketAddr,
 	timeout: Duration,
 ) -> Result<(), bool> {

@@ -44,6 +44,14 @@ impl ActionId {
 			None
 		}
 	}
+
+	pub fn to_upstream_id(&self) -> Option<Option<u8>> {
+		match self {
+			Self::Default => Some(None),
+			Self::Alt(i) => Some(Some(*i)),
+			_ => None,
+		}
+	}
 }
 
 impl Display for ActionId {
