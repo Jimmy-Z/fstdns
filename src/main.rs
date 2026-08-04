@@ -69,7 +69,7 @@ async fn main() -> Dummy {
 	loop {
 		buf.clear();
 		let (len, addr) = s.recv_buf_from(&mut buf).await?;
-		eprintln!("{len} bytes from {addr}:\n{:?}", Pretty(&buf[..]));
+		debug!("{len} bytes from {addr}:\n{:?}", Pretty(&buf[..]));
 		// this is not spawn
 		// since some queries are handled directly by rule in memory
 		handle(&s, addr, &mut buf, &c, &dmap).await;
@@ -101,7 +101,7 @@ async fn handle(
 	let action = 'blk: {
 		// to do: chaos
 		if q.qclass != QClass::IN {
-			break 'blk ActionId::NotImp;
+			break 'blk ActionId::RCode(RCode::NOTIMP);
 		}
 		// exact rules
 		// yeah looks quirky but the other option is to pull in hashbrown::Equivalent
@@ -127,7 +127,7 @@ async fn handle(
 				break 'blk a;
 			} else {
 				error!("");
-				break 'blk ActionId::ServFail;
+				break 'blk ActionId::RCode(RCode::SERVFAIL);
 			}
 		}
 		ActionId::Default
@@ -136,19 +136,15 @@ async fn handle(
 		// to do: random or round robin
 		ActionId::Default => conf.default[0],
 		ActionId::Alt(i) => conf.alts[i as usize][0],
-		a => {
-			let rcode = match a {
-				ActionId::NotImp => RCode::NOTIMP,
-				ActionId::ServFail => RCode::SERVFAIL,
-				ActionId::NxDomain => RCode::NXDOMAIN,
-				ActionId::Refused => RCode::REFUSED,
-				_ => unreachable!(),
-			};
-			msg.deny(rcode);
+		ActionId::RCode(c) => {
+			msg.deny(c);
 			if let Err(e) = s.send_to(buf, addr).await {
 				warn!("error sending response to {addr}: {e}");
 			}
 			return;
+		}
+		ActionId::Rewrite(i) => {
+			todo!()
 		}
 	};
 	let s = s.clone();

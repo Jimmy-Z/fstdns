@@ -8,7 +8,7 @@ use std::{
 
 use smart_default::SmartDefault;
 
-use dns::{CVec63, QType};
+use dns::{Answer, CVec63, QType};
 
 use super::{action::ActionId, dmap::DMapBuilder};
 
@@ -23,6 +23,7 @@ pub struct Conf {
 	pub listen: SocketAddr,
 	pub default: Vec<SocketAddr>,
 	pub alts: Vec<Vec<SocketAddr>>,
+	pub rewrites: Vec<Vec<Answer>>,
 	pub exact_rules: HashMap<(CVec63, QType), ActionId>,
 	pub unqualified_rule: Option<ActionId>,
 	pub qtype_rules: Vec<(QType, ActionId)>,
@@ -130,7 +131,7 @@ impl Conf {
 		if args.len() < 2 {
 			panic!("invalid qtype rule: \"{}\"", args.join(" "));
 		}
-		let qtype = QType::try_from(args[0]).unwrap();
+		let qtype = QType::from_str(args[0]).unwrap();
 		let action = self.inner_action(&args[1..]);
 		self.qtype_rules.push((qtype, action));
 	}
@@ -140,11 +141,8 @@ impl Conf {
 			0 => {
 				panic!("action not specified in rule");
 			}
-			1 => match args[0].to_ascii_lowercase().as_str() {
-				"default" => ActionId::Default,
-				"nxdomain" => ActionId::NxDomain,
-				"notimp" => ActionId::NotImp,
-				"refused" => ActionId::Refused,
+			1 => match ActionId::from_str(args[0].to_ascii_lowercase().as_str()) {
+				Ok(a) => a,
 				_ => {
 					panic!("invalid action \"{}\"", args[0]);
 				}
