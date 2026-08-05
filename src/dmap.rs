@@ -196,17 +196,25 @@ mod tests {
 	#[ignore]
 	fn test_build() {
 		let mut b = DMapBuilder::default();
-		mem();
+		rss();
 		b.add_file(DOMAIN_LST_FILE, DOMAIN_LST_PRE, 0).unwrap();
-		mem();
+		rss();
 		let m = b.build().unwrap();
-		mem();
+		rss();
+		#[cfg(all(target_os = "linux", target_env = "gnu"))]
+		{
+			unsafe {
+				libc::malloc_trim(0x1000);
+			}
+			eprintln!("malloc_trim called");
+			rss();
+		}
 		eprintln!("fst: {:.2} MB", m.0.size() as f32 / 1048576.0);
 	}
 
-	fn mem() {
+	fn rss() {
 		eprintln!(
-			"mem: {:.2} MB",
+			"rss: {:.2} MB",
 			memory_stats::memory_stats().unwrap().physical_mem as f32 / 1048576.0
 		);
 	}

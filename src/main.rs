@@ -53,6 +53,11 @@ async fn main() -> Dummy {
 	}
 
 	let dmap = dmap.build()?;
+	// glibc is lazy on free
+	#[cfg(all(target_os = "linux", target_env = "gnu"))]
+	unsafe {
+		libc::malloc_trim(0x1000);
+	}
 
 	if conf.default.is_empty() {
 		error!("default upstream not configured");
