@@ -1,4 +1,5 @@
 use std::{
+	cell::RefCell,
 	collections::HashMap,
 	fs::File,
 	io::{BufRead as _, BufReader},
@@ -16,7 +17,7 @@ use super::{action::ActionId, dmap::DMapBuilder};
 const DEFAULT_DNS_PORT: u16 = 53;
 
 const DEFAULT_LISTEN_ADDR: SocketAddr =
-	SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), DEFAULT_DNS_PORT);
+	SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_DNS_PORT);
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(2501);
 
@@ -36,6 +37,9 @@ pub struct Conf {
 	pub unqualified_rule: Option<ActionId>,
 	pub qtype_rules: Vec<(QType, ActionId)>,
 	pub addr_rules: HashMap<IpAddr, ActionId>,
+
+	// feels a little strange to be here
+	pub rt_name_rules: RefCell<HashMap<CVec63, ActionId>>,
 }
 
 impl Conf {
@@ -68,6 +72,9 @@ impl Conf {
 			}
 			"qtype" => {
 				self.qtype_rule(&args[1..]);
+			}
+			"addr" => {
+				self.addr_rule(&args[1..]);
 			}
 			_ => {
 				panic!("unrecognized conf line: \"{}\"", l);
@@ -128,7 +135,7 @@ impl Conf {
 		if args.len() < 2 {
 			panic!("invalid domain rule: \"{}\"", args.join(" "));
 		}
-		let (path, prefix) = args[0].split_once(' ').unwrap_or((args[0], ""));
+		let (path, prefix) = args[0].split_once('^').unwrap_or((args[0], ""));
 		let action = self.inner_action(&args[1..]);
 		if b.add_file(path, prefix.as_bytes(), action.into()).is_err() {
 			panic!("error loading domain list \"{}\"", path);
@@ -142,6 +149,15 @@ impl Conf {
 		let qtype = QType::from_str(args[0]).unwrap();
 		let action = self.inner_action(&args[1..]);
 		self.qtype_rules.push((qtype, action));
+	}
+
+	fn addr_rule(&mut self, args: &[&str]) {
+		if args.len() < 2 {
+			panic!("invalid addr rule: \"{}\"", args.join(" "));
+		}
+		let addr = IpAddr::from_str(args[0]).unwrap();
+		let action = self.inner_action(&args[1..]);
+		self.addr_rules.insert(addr, action);
 	}
 
 	fn inner_action(&mut self, args: &[&str]) -> ActionId {

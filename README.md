@@ -65,9 +65,10 @@ list of configurations:
 		- [x] `qtype <qtype>` dns query type
 			* a few names are supported like AAAA, SVCB, HTTPS
 			* or decimal number
-		- [ ] `addr <addr>`
+		- [x] `addr <addr>`
 			* answer (from a previously chosen upstream) matches this address
-			* v4 or v6
+				* once hit, a runtime name rule is generated
+			* v4/v6 supported
 		- [ ] `unqualified` for names without any dots
 		- [ ] `exact <domain> <qtype>`
 	* actions,
@@ -90,6 +91,7 @@ hosts /etc/hosts lan
 domain-list /etc/list alt 3.3.3.3
 # block these domains
 # `^*.` handles oisd _domainswild_ list intended for FreshTomato
+# by removing *. from the start of each line
 # this is to explain how prefix handling works
 # oisd also has a _domainswild2_ list which can be used directly
 domain-list /etc/oisd^*. nxdomain
@@ -115,9 +117,12 @@ even with `unqualified nxdomain`, hosts records will still be served.
 	* rules for unqualified names
 	* query type rules
 	* domain rules
+	* runtime rules
 	* default upstream
 * CHAOS diagnostics
-	* `drill example.com txt ch`
+	- [x] `drill runtime.rules txt ch`
+		* inspect runtime rules
+	- [ ] `drill example.com txt ch`
 		* test domain rules, since this skips other checks,
 		it might not reflect actual behavior
 

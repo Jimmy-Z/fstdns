@@ -74,7 +74,7 @@ async fn main() -> Dummy {
 	loop {
 		buf.clear();
 		let (len, addr) = s.recv_buf_from(&mut buf).await?;
-		debug!("{len} bytes from {addr}:\n{:?}", Pretty(&buf[..]));
+		trace!("{len} bytes from {addr}:\n{:?}", Pretty(&buf[..]));
 		// this is not spawn
 		// since some queries are handled directly by rule in memory
 		handle(&s, addr, &mut buf, &c, &dmap).await;
@@ -103,15 +103,20 @@ async fn handle(
 		return;
 	}
 	let mut q = q.unwrap();
+	debug!("{q}");
 	let action = 'rules: {
 		// to do: chaos
-		if q.qclass != QClass::IN {
+		if q.qclass == QClass::CH {
+			handle_chaos(s, addr, buf, conf).await;
+			return;
+		} else if q.qclass != QClass::IN {
 			break 'rules ActionId::RCode(RCode::NOTIMP);
 		}
 		// exact rules
 		// yeah looks quirky but the other option is to pull in hashbrown::Equivalent
 		let k = (q.name, q.qtype);
 		if let Some(a) = conf.exact_rules.get(&k) {
+			debug!("exact rule: {a}");
 			break 'rules *a;
 		}
 		// gives back the moved member, hopefully this gets optimized out
@@ -120,21 +125,31 @@ async fn handle(
 		if let Some(a) = conf.unqualified_rule
 			&& unqualified(q.name.as_ref())
 		{
+			debug!("unqualified rule: {a}");
 			break 'rules a;
 		}
 		// qtype rules
 		if let Ok(i) = conf.qtype_rules.binary_search_by_key(&q.qtype, |k| k.0) {
-			break 'rules conf.qtype_rules[i].1;
+			let a = conf.qtype_rules[i].1;
+			debug!("qtype rule: {a}");
+			break 'rules a;
 		}
 		// domain rules
 		if let Some(v) = dmap.get(q.name.as_ref()) {
 			if let Ok(a) = ActionId::try_from(v) {
+				debug!("domain map rule: {a}");
 				break 'rules a;
 			} else {
-				error!("");
+				error!("dmap returns 0x{v:x}, not a valid action");
 				break 'rules ActionId::RCode(RCode::SERVFAIL);
 			}
 		}
+		// runtime rules
+		if let Some(a) = conf.rt_name_rules.borrow().get(&q.name) {
+			debug!("runtime rule: {a}");
+			break 'rules *a;
+		}
+		debug!("default");
 		ActionId::Default
 	};
 	if let Some(upstream_id) = action.to_upstream_id() {
@@ -147,6 +162,30 @@ async fn handle(
 		if let Err(e) = s.send_to(buf, addr).await {
 			warn!("error sending response to {addr}: {e}");
 		}
+	}
+}
+
+async fn handle_chaos(s: &Rc<UdpSocket>, addr: SocketAddr, buf: &mut Vec<u8>, conf: &Rc<Conf>) {
+	let mut msg = Msg::try_from(&mut *buf).unwrap();
+	let q = msg.get_query().unwrap();
+	if q.name.as_ref() == b"runtime.rules" && q.qtype == QType::TXT {
+		let mut ans = Vec::new();
+		for (k, v) in conf.rt_name_rules.borrow().iter() {
+			let k = str::from_utf8(k.as_ref()).unwrap();
+			let v = &format!("{v}");
+			ans.push(Answer {
+				qtype: QType::TXT,
+				qclass: QClass::CH,
+				ttl: 42,
+				rdata: RData::Raw(CVec63::txt(&[k, v])),
+			});
+		}
+		msg.answer(&ans);
+	} else {
+		msg.deny(RCode::NOTIMP);
+	}
+	if let Err(e) = s.send_to(buf, addr).await {
+		warn!("error sending response to {addr}: {e}");
 	}
 }
 
@@ -165,7 +204,7 @@ fn handle_local_action(msg: &mut Msg, action: ActionId, conf: &Rc<Conf>) {
 async fn handle_upstream(
 	c: Rc<UdpSocket>,
 	c_addr: SocketAddr,
-	query: Vec<u8>,
+	mut query: Vec<u8>,
 	upstream_id: Option<u8>,
 	conf: Rc<Conf>,
 ) -> Result<(), ()> {
@@ -199,6 +238,16 @@ async fn handle_upstream(
 	}
 	if let Some(action) = action {
 		if let Some(upstream_id) = action.to_upstream_id() {
+			// save it as a runtime rule
+			{
+				// had to parse it again since passing it alone is a PITA
+				let mut msg = Msg::try_from(&mut query).unwrap();
+				let q = msg.get_query().unwrap();
+				let n = q.name;
+				debug!("answer for \"{n}\" hit addr rule: {action}");
+				conf.rt_name_rules.borrow_mut().insert(n, action);
+			}
+			answer.clear();
 			handle_upstream_inner(&mut answer, &query, upstream_id, &conf).await;
 		} else {
 			error!("action {action} for answer addr condition is not implemented yet");
