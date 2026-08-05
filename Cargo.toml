@@ -21,3 +21,8 @@ misc = { path = "../misc" }
 [dev-dependencies]
 rand = "*"
 memory-stats = "1"
+
+[profile.release]
+lto = true
+strip = true
+
