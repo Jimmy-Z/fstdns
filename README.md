@@ -22,9 +22,10 @@ it could run on very memory constrained home routers.
 
 yeah I know this is over-engineering, but, just to scratch an itch.
 
-### other functions
+### features
 * alternative upstream server for matching domains
-	* this is also available on dnsmasq
+	* this is also available on dnsmasq,
+	but fstdns is optimized for huge domain lists
 * retry on a different upstream if answer matches a condition
 * block queries by QTYPE
 * more in config

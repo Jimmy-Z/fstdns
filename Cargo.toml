@@ -20,3 +20,4 @@ misc = { path = "../misc" }
 
 [dev-dependencies]
 rand = "*"
+memory-stats = "1"

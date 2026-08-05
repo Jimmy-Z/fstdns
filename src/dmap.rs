@@ -129,7 +129,7 @@ impl DMapBuilder {
 		}
 		let t = b.into_fst();
 		let t2 = Instant::now();
-		eprintln!(
+		info!(
 			"built fst: {} bytes, ratio: {:.1}%, in {:.1}ms",
 			t.size(),
 			t.size() as f32 * 100f32 / bytes as f32,
@@ -196,13 +196,23 @@ mod tests {
 	#[ignore]
 	fn test_build() {
 		let mut b = DMapBuilder::default();
+		mem();
 		b.add_file(DOMAIN_LST_FILE, DOMAIN_LST_PRE, 0).unwrap();
-		let _ = b.build().unwrap();
+		mem();
+		let m = b.build().unwrap();
+		mem();
+		eprintln!("fst: {:.2} MB", m.0.size() as f32 / 1048576.0);
+	}
+
+	fn mem() {
+		eprintln!(
+			"mem: {:.2} MB",
+			memory_stats::memory_stats().unwrap().physical_mem as f32 / 1048576.0
+		);
 	}
 
 	// you probably want to test this with a release build since it's slow
 	// cargo test --release test_match_lst_macro -- --ignored --no-capture
-	// test result show
 	#[test]
 	#[ignore]
 	fn test_match_lst_macro() {
