@@ -130,6 +130,7 @@ async fn handle(
 		return;
 	}
 	let mut q = q.unwrap();
+	trace!("{msg}");
 	debug!("{q}");
 	let action = 'rules: {
 		// to do: chaos
@@ -235,7 +236,7 @@ async fn handle_upstream(
 	upstream_id: Option<u8>,
 	conf: Rc<Conf>,
 ) -> Result<(), ()> {
-	let mut answer = Vec::with_capacity(MSG_BUF_LEN_DEF);
+	let mut answer = Vec::with_capacity(0x600);
 	// to do: shuffle upstream
 	handle_upstream_inner(&mut answer, &mut query, upstream_id, &conf).await;
 	if answer.is_empty() {
