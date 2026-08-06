@@ -68,9 +68,7 @@ async fn main() -> Dummy {
 
 	conf.finalize();
 
-	let s = UdpSocket::bind(conf.listen)
-		.await
-		.inspect_err(|e| error!("failed to listen on {}: {e}", conf.listen))?;
+	let s = udp_bind(conf.listen)?;
 	info!("listening on UDP {}", s.local_addr()?);
 
 	let s = Rc::new(s);
@@ -84,6 +82,28 @@ async fn main() -> Dummy {
 		// since some queries are handled directly by rule in memory
 		handle(&s, addr, &mut buf, &c, &dmap).await;
 	}
+}
+
+fn udp_bind(addr: SocketAddr) -> Result<UdpSocket, ()> {
+	use socket2::{Domain, Protocol, Socket, Type};
+
+	let socket = Socket::new(Domain::for_address(addr), Type::DGRAM, Some(Protocol::UDP))
+		.map_err(|e| error!("error creating socket: {e}"))?;
+	if addr.is_ipv6() && addr.ip() == IpAddr::V6(Ipv6Addr::UNSPECIFIED) {
+		socket
+			.set_only_v6(false)
+			.map_err(|e| warn!("error setting IPV6_V6ONLY to false: {e}"))?;
+	}
+	socket
+		.set_reuse_address(true)
+		.map_err(|e| warn!("error setting SO_REUSEADDR: {e}"))?;
+	socket
+		.set_nonblocking(true)
+		.map_err(|e| warn!("error setting socket to nonblocking mode: {e}"))?;
+	socket
+		.bind(&addr.into())
+		.map_err(|e| error!("error binding udp socket: {e}"))?;
+	UdpSocket::from_std(socket.into()).map_err(|e| error!("error converting socket to tokio: {e}"))
 }
 
 async fn handle(

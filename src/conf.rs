@@ -3,7 +3,7 @@ use std::{
 	collections::HashMap,
 	fs::File,
 	io::{BufRead as _, BufReader},
-	net::{IpAddr, Ipv4Addr, SocketAddr},
+	net::{IpAddr, Ipv6Addr, SocketAddr},
 	str::FromStr,
 	time::Duration,
 };
@@ -17,7 +17,7 @@ use super::{action::ActionId, dmap::DMapBuilder};
 const DEFAULT_DNS_PORT: u16 = 53;
 
 const DEFAULT_LISTEN_ADDR: SocketAddr =
-	SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), DEFAULT_DNS_PORT);
+	SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), DEFAULT_DNS_PORT);
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_millis(2501);
 

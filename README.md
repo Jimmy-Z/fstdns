@@ -40,9 +40,11 @@ yeah I know this is over-engineering, but, just to scratch an itch.
 ### config
 takes one parameter: path to a conf file,
 list of configurations:
-- [x] `listen`, default to `0.0.0.0:53`
+- [x] `listen`, default to `[::]:53`
 	* if specified multiple times, newer overwrites older
-- [x] `default`, default upstream when no rules match
+	* if address is `::`, `IPV6_V6ONLY` is set to `false`,
+	thus effectively also listens on `0.0.0.0`.
+- [x] `default <address> ...`, default upstream when no rules match
 - [x] `resolv-conf <path>`, get upstream from resolv conf
 	* if specified multiple times, newer overwrites older
 	* `default` and `resolv-conf ...` overwrites each other

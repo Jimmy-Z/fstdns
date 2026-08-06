@@ -11,6 +11,7 @@ smart-default = "*"
 
 tokio = {version = "1", features = ["macros", "rt", "io-util", "net", "time"]}
 fst = "*"
+socket2 = "*"
 
 dns = { path = "../bbdnsp" }
 misc = { path = "../misc" }
