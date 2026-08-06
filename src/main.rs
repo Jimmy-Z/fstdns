@@ -243,41 +243,52 @@ async fn handle_upstream(
 		return Err(());
 	}
 
-	// addr rule
-	let mut msg = Msg::try_from(&mut answer)
-		.map_err(|e| warn!("invalid header in answer for {}: {e:?}", get_q(&mut query)))?;
-	let _ = msg
-		.get_query()
-		.map_err(|e| warn!("invalid query in answer: {e:?}"))?;
-	let mut action = None;
-	for _ in 0..msg.an_count() {
-		let answer = msg
-			.next_answer()
-			.map_err(|e| warn!("invalid answer in answer: {e:?}"))?;
-		if let Some(addr) = match answer.rdata {
-			RData::A(a) => Some(IpAddr::V4(a)),
-			RData::AAAA(aaaa) => Some(IpAddr::V6(aaaa)),
-			_ => None,
-		} && let Some(a) = conf.addr_rules.get(&addr)
-		{
-			action = Some(*a);
-			break;
-		}
-	}
-	if let Some(action) = action {
-		if let Some(upstream_id) = action.to_upstream_id() {
-			// save it as a runtime rule
-			{
-				// had to parse it again since passing it alone is a PITA
-				let n = get_q(&mut query).name;
-				debug!("answer for \"{n}\" hit addr rule: {action}");
-				conf.rt_name_rules.borrow_mut().insert(n, action);
+	match Msg::try_from(&mut answer) {
+		Ok(mut msg) => {
+			// addr rule
+			let _ = msg
+				.get_query()
+				.map_err(|e| warn!("invalid query in response: {e:?}"))?;
+			let mut action = None;
+			for _ in 0..msg.an_count() {
+				let answer = msg
+					.next_answer()
+					.map_err(|e| warn!("invalid answer in response: {e:?}"))?;
+				if let Some(addr) = match answer.rdata {
+					RData::A(a) => Some(IpAddr::V4(a)),
+					RData::AAAA(aaaa) => Some(IpAddr::V6(aaaa)),
+					_ => None,
+				} && let Some(a) = conf.addr_rules.get(&addr)
+				{
+					action = Some(*a);
+					break;
+				}
 			}
-			answer.clear();
-			handle_upstream_inner(&mut answer, &mut query, upstream_id, &conf).await;
-		} else {
-			error!("action {action} for answer addr condition is not implemented yet");
-			return Ok(());
+			if let Some(action) = action {
+				if let Some(upstream_id) = action.to_upstream_id() {
+					// save it as a runtime rule
+					{
+						// had to parse it again since passing it alone is a PITA
+						let n = get_q(&mut query).name;
+						debug!("answer for \"{n}\" hit addr rule: {action}");
+						conf.rt_name_rules.borrow_mut().insert(n, action);
+					}
+					answer.clear();
+					handle_upstream_inner(&mut answer, &mut query, upstream_id, &conf).await;
+				} else {
+					error!("action {action} for answer addr condition is not implemented yet");
+					return Ok(());
+				}
+			}
+		}
+		Err(MsgError::Truncated) => {
+			// this is normal
+		}
+		Err(e) => {
+			warn!(
+				"invalid header in response for {}: {e:?}",
+				get_q(&mut query)
+			);
 		}
 	}
 
@@ -341,14 +352,14 @@ async fn handle_upstream_inner_inner(
 		false
 	})?;
 	u.send(query).await.map_err(|e| {
-		error!("error sending query to upstream: {e}");
+		error!("error sending request to upstream: {e}");
 		false
 	})?;
 
 	match tokio::time::timeout(timeout, u.recv_buf(answer)).await {
 		Ok(Ok(len)) => trace!("{len} bytes from upstream"),
 		Ok(Err(e)) => {
-			warn!("error receiving answer from upstream: {e}");
+			warn!("error receiving response from upstream: {e}");
 			return Err(true);
 		}
 		Err(e) => {
