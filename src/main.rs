@@ -25,6 +25,8 @@ const DEBUG_CONF_PATH: &str = "etc/conf";
 #[tokio::main(flavor = "local")]
 async fn main() -> Dummy {
 	init_env_logger();
+	info!("{}", env!("REV"));
+
 	let args: Vec<_> = std::env::args().take(3).collect();
 	let mut conf = Conf::default();
 	let mut dmap = DMapBuilder::default();
@@ -92,14 +94,14 @@ fn udp_bind(addr: SocketAddr) -> Result<UdpSocket, ()> {
 	if addr.is_ipv6() && addr.ip() == IpAddr::V6(Ipv6Addr::UNSPECIFIED) {
 		socket
 			.set_only_v6(false)
-			.map_err(|e| warn!("error setting IPV6_V6ONLY to false: {e}"))?;
+			.map_err(|e| warn!("error disabling IPV6_V6ONLY: {e}"))?;
 	}
 	socket
 		.set_reuse_address(true)
 		.map_err(|e| warn!("error setting SO_REUSEADDR: {e}"))?;
 	socket
 		.set_nonblocking(true)
-		.map_err(|e| warn!("error setting socket to nonblocking mode: {e}"))?;
+		.map_err(|e| warn!("error setting socket to non-blocking: {e}"))?;
 	socket
 		.bind(&addr.into())
 		.map_err(|e| error!("error binding udp socket: {e}"))?;
@@ -235,14 +237,14 @@ async fn handle_upstream(
 ) -> Result<(), ()> {
 	let mut answer = Vec::with_capacity(MSG_BUF_LEN_DEF);
 	// to do: shuffle upstream
-	handle_upstream_inner(&mut answer, &query, upstream_id, &conf).await;
+	handle_upstream_inner(&mut answer, &mut query, upstream_id, &conf).await;
 	if answer.is_empty() {
 		return Err(());
 	}
 
 	// addr rule
-	let mut msg =
-		Msg::try_from(&mut answer).map_err(|e| warn!("invalid header in answer: {e:?}"))?;
+	let mut msg = Msg::try_from(&mut answer)
+		.map_err(|e| warn!("invalid header in answer for {}: {e:?}", get_q(&mut query)))?;
 	let _ = msg
 		.get_query()
 		.map_err(|e| warn!("invalid query in answer: {e:?}"))?;
@@ -266,14 +268,12 @@ async fn handle_upstream(
 			// save it as a runtime rule
 			{
 				// had to parse it again since passing it alone is a PITA
-				let mut msg = Msg::try_from(&mut query).unwrap();
-				let q = msg.get_query().unwrap();
-				let n = q.name;
+				let n = get_q(&mut query).name;
 				debug!("answer for \"{n}\" hit addr rule: {action}");
 				conf.rt_name_rules.borrow_mut().insert(n, action);
 			}
 			answer.clear();
-			handle_upstream_inner(&mut answer, &query, upstream_id, &conf).await;
+			handle_upstream_inner(&mut answer, &mut query, upstream_id, &conf).await;
 		} else {
 			error!("action {action} for answer addr condition is not implemented yet");
 			return Ok(());
@@ -288,9 +288,15 @@ async fn handle_upstream(
 	Ok(())
 }
 
+// this is used to re-retrieve info on previously parsed buf
+fn get_q(buf: &mut Vec<u8>) -> Query {
+	let mut msg = Msg::try_from(buf).unwrap();
+	msg.get_query().unwrap()
+}
+
 async fn handle_upstream_inner(
 	answer: &mut Vec<u8>,
-	query: &[u8],
+	query: &mut Vec<u8>,
 	upstream_id: Option<u8>,
 	conf: &Rc<Conf>,
 ) {
@@ -316,7 +322,7 @@ const DEFAULT_BIND_V6: SocketAddr = SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECI
 // the error indicates should retry (next address) or not
 async fn handle_upstream_inner_inner(
 	answer: &mut Vec<u8>,
-	query: &[u8],
+	query: &mut Vec<u8>,
 	upstream: SocketAddr,
 	timeout: Duration,
 ) -> Result<(), bool> {
@@ -345,7 +351,7 @@ async fn handle_upstream_inner_inner(
 			return Err(true);
 		}
 		Err(e) => {
-			warn!("timeout waiting for upstream: {e}");
+			warn!("timeout waiting upstream for {}: {e}", get_q(query));
 			return Err(true);
 		}
 	}
